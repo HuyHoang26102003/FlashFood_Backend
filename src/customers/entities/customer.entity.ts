@@ -108,7 +108,7 @@ export class Customer {
 
   @Column({ name: 'updated_at' })
   updated_at: number;
-  @Column({ name: 'last_login' })
+  @Column({ name: 'last_login', nullable: true })
   last_login: number;
 
   @OneToMany(() => Order, order => order.customer)
@@ -119,5 +119,6 @@ export class Customer {
     this.id = `FF_CUS_${uuidv4()}`;
     this.created_at = Math.floor(Date.now() / 1000);
     this.updated_at = Math.floor(Date.now() / 1000);
+    this.last_login = Math.floor(Date.now() / 1000);
   }
 }

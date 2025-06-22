@@ -6,8 +6,7 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
-  Req
+  UseGuards
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreateAdminDto } from './dto/create-admin.dto';
@@ -16,7 +15,7 @@ import { UpdatePermissionsDto } from './dto/update-admin.dto'; // Fix import
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { PermissionGuard } from './guards/permission.guard'; // Đã fix đường dẫn
 import { Permissions } from './decorators/permissions.decorator';
-import { AdminPermission, AdminRole } from 'src/utils/types/admin';
+import { AdminPermission } from 'src/utils/types/admin';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard)
@@ -33,11 +32,6 @@ export class AdminController {
   @Get()
   findAll() {
     return this.adminService.findAll();
-  }
-
-  @Get('by-role/:role')
-  findAllByRole(@Param('role') role: AdminRole) {
-    return this.adminService.findAllByRole(role);
   }
 
   @Get(':id')
@@ -64,15 +58,10 @@ export class AdminController {
     @Param('entityType')
     entityType: 'Customer' | 'CustomerCare' | 'Driver' | 'Restaurant',
     @Param('entityId') entityId: string,
-    @Req() req: any,
+    @Body('adminId') adminId: string,
     @Body('reason') reason?: string
   ) {
-    return this.adminService.banAccount(
-      entityType,
-      entityId,
-      req.admin.id,
-      reason
-    );
+    return this.adminService.banAccount(entityType, entityId, adminId, reason);
   }
 
   @Patch('permissions/:id')
@@ -81,12 +70,12 @@ export class AdminController {
   updatePermissions(
     @Param('id') adminId: string,
     @Body() updatePermissionsDto: UpdatePermissionsDto,
-    @Req() req: any
+    @Body('requesterId') requesterId: string
   ) {
     return this.adminService.updatePermissions(
       adminId,
       updatePermissionsDto,
-      req.admin.id
+      requesterId
     );
   }
 }

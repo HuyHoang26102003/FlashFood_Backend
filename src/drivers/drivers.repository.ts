@@ -161,31 +161,10 @@ export class DriversRepository {
     skip: number,
     limit: number
   ): Promise<[Driver[], number]> {
-    const result = await this.driverEntityRepository
-      .createQueryBuilder('driver')
-      .leftJoin(
-        'banned_accounts',
-        'ban',
-        'ban.entity_id = driver.id AND ban.entity_type = :entityType',
-        {
-          entityType: 'Driver'
-        }
-      )
-      .addSelect(
-        'CASE WHEN ban.id IS NOT NULL THEN true ELSE false END',
-        'driver_is_banned'
-      )
-      .leftJoinAndSelect('driver.user', 'user')
-      .skip(skip)
-      .take(limit)
-      .getRawAndEntities();
-
-    const drivers = result.entities.map((driver, index) => {
-      (driver as any).is_banned = result.raw[index]?.driver_is_banned || false;
-      return driver;
+    return await this.driverEntityRepository.findAndCount({
+      skip,
+      take: limit,
+      relations: ['user']
     });
-
-    const total = await this.driverEntityRepository.count();
-    return [drivers, total];
   }
 }

@@ -238,11 +238,7 @@ export class Order {
   @BeforeInsert()
   generateId() {
     this.id = `FF_ORDER_${uuidv4()}`;
-    if (!this.created_at) {
-      this.created_at = Math.floor(Date.now() / 1000);
-    }
-    if (!this.updated_at) {
-      this.updated_at = Math.floor(Date.now() / 1000);
-    }
+    this.created_at = Math.floor(Date.now() / 1000);
+    this.updated_at = Math.floor(Date.now() / 1000);
   }
 }

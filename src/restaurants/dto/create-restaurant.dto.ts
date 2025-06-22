@@ -4,6 +4,7 @@ import {
   IsArray,
   IsObject,
   IsBoolean,
+  IsEmail,
   IsNumber,
   ValidateNested
 } from 'class-validator';
@@ -16,7 +17,7 @@ export class ContactEmail {
   @IsBoolean()
   is_default: boolean;
 
-  @IsString()
+  @IsEmail()
   email: string;
 }
 

@@ -5,7 +5,7 @@ import {
   IsEnum,
   IsNumber,
   Min,
-  IsOptional
+  IsOptional,
 } from 'class-validator';
 
 export class CreateOrderDto {
@@ -28,17 +28,15 @@ export class CreateOrderDto {
     'READY_FOR_PICKUP',
     'RESTAURANT_PICKUP',
     'DISPATCHED',
-    'CANCELLED',
     'EN_ROUTE',
     'OUT_FOR_DELIVERY',
     'DELIVERED',
-    'DELIVERY_FAILED'
+    'DELIVERY_FAILED',
   ])
   status:
     | 'PENDING'
     | 'RESTAURANT_ACCEPTED'
     | 'PREPARING'
-    | 'CANCELLED'
     | 'IN_PROGRESS'
     | 'READY_FOR_PICKUP'
     | 'RESTAURANT_PICKUP'
@@ -107,7 +105,7 @@ export class CreateOrderDto {
     'EN_ROUTE',
     'OUT_FOR_DELIVERY',
     'DELIVERY_FAILED',
-    'DELIVERED'
+    'DELIVERED',
   ])
   tracking_info:
     | 'ORDER_PLACED'

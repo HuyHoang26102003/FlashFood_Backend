@@ -34,15 +34,12 @@ export class Restaurant {
   @Column()
   owner_name: string;
 
-  @Column()
+  @Column({ nullable: true })
   address_id: string;
 
   @ManyToOne(() => AddressBook)
   @JoinColumn({ name: 'address_id' })
   address: AddressBook;
-
-  @Column({ name: 'last_login' })
-  last_login: number;
 
   @Column()
   restaurant_name: string;
@@ -128,5 +125,10 @@ export class Restaurant {
     this.created_at = Math.floor(Date.now() / 1000);
     this.updated_at = Math.floor(Date.now() / 1000);
     this.total_orders = 0;
+
+    // If no address_id provided, create a default one or leave it null
+    if (!this.address_id) {
+      this.address_id = null; // Will be set later when address is created
+    }
   }
 }

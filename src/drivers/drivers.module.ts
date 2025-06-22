@@ -50,9 +50,6 @@ import { MenuItemVariant } from 'src/menu_item_variants/entities/menu_item_varia
 import { RestaurantsGateway } from 'src/restaurants/restaurants.gateway';
 import { FoodCategory } from 'src/food_categories/entities/food_category.entity';
 import { FoodCategoriesRepository } from 'src/food_categories/food_categories.repository';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { NotificationsRepository } from 'src/notifications/notifications.repository';
-import { Notification } from 'src/notifications/entities/notification.entity';
 
 @Module({
   imports: [
@@ -74,8 +71,7 @@ import { Notification } from 'src/notifications/entities/notification.entity';
       FWallet,
       DriverStatsRecord,
       MenuItemVariant,
-      RatingsReview,
-      Notification
+      RatingsReview
     ]),
     forwardRef(() => RestaurantsModule),
     forwardRef(() => OrdersModule),
@@ -109,8 +105,6 @@ import { Notification } from 'src/notifications/entities/notification.entity';
     PromotionsRepository,
     JwtService,
     DriverStatsService,
-    NotificationsService,
-    NotificationsRepository,
     {
       provide: 'SOCKET_SERVER',
       useFactory: () => {

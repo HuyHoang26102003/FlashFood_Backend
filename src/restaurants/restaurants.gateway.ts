@@ -428,7 +428,6 @@ export class RestaurantsGateway
         updated_at: order.order.updated_at,
         customer_id: order.order.customer_id,
         total_amount: order.order.total_amount,
-        total_restaurant_earn: order.order.total_restaurant_earn,
         order_items: order.order.order_items,
         driver_id: order.order.driver_id,
         restaurant_id: order.order.restaurant_id,
@@ -533,7 +532,7 @@ export class RestaurantsGateway
       });
 
       await this.notifyDriverAndParties(
-        { ...updatedOrder, distance: distance },
+        updatedOrder,
         selectedDriver.id,
         driver_wage
       );
@@ -734,13 +733,11 @@ export class RestaurantsGateway
 
     try {
       const trackingUpdate = {
-        ...order,
         orderId: order.id,
         status: order.status,
         tracking_info: order.tracking_info,
         updated_at: order.updated_at,
         customer_id: order.customer_id,
-        order_items: order.order_items,
         driver_id: order.driver_id,
         restaurant_id: order.restaurant_id,
         restaurant_avatar: order.restaurant?.avatar || null,
@@ -815,7 +812,6 @@ export class RestaurantsGateway
       }
 
       const trackingUpdate = {
-        ...order,
         orderId: order.orderId,
         status: order.status,
         tracking_info: order.tracking_info,

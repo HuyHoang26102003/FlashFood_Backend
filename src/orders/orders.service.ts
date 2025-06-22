@@ -127,74 +127,12 @@ export class OrdersService {
     return rule;
   }
 
-  async createOrder(
-    createOrderDto: CreateOrderDto,
-    isGenerated: boolean = false
-  ): Promise<ApiResponse<any>> {
+  async createOrder(createOrderDto: CreateOrderDto): Promise<ApiResponse<any>> {
     const start = Date.now();
-    logger.log(
-      'createOrder called with:',
-      JSON.stringify(createOrderDto),
-      'isGenerated:',
-      isGenerated
-    );
-
-    // Generate random timestamps if isGenerated is true
-    let orderTimestamp: number;
-    let createdAtTimestamp: number;
-    let updatedAtTimestamp: number;
-
-    if (isGenerated) {
-      // Get timestamp from 1 month ago
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      const oneMonthAgoTs = oneMonthAgo.getTime();
-      const nowTs = Date.now();
-
-      // First, pick a random date between 1 month ago and now
-      const randomDateTs = Math.floor(
-        Math.random() * (nowTs - oneMonthAgoTs) + oneMonthAgoTs
-      );
-      const randomDate = new Date(randomDateTs);
-      randomDate.setUTCHours(0, 0, 0, 0);
-      const startOfDay = randomDate.getTime();
-      const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
-
-      // Generate three different timestamps within the same day (in seconds)
-      // Order: created_at < order_time < updated_at
-      const dayDuration = endOfDay - startOfDay;
-
-      createdAtTimestamp = Math.floor(
-        (Math.random() * (dayDuration / 3) + startOfDay) / 1000
-      );
-
-      orderTimestamp = Math.floor(
-        (Math.random() * (dayDuration / 3) + (startOfDay + dayDuration / 3)) /
-          1000
-      );
-
-      updatedAtTimestamp = Math.floor(
-        (Math.random() * (dayDuration / 3) +
-          (startOfDay + (2 * dayDuration) / 3)) /
-          1000
-      );
-
-      logger.log(`Generated timestamps for same day:`, {
-        date: randomDate.toISOString().split('T')[0],
-        created_at: new Date(createdAtTimestamp * 1000).toISOString(),
-        order_time: new Date(orderTimestamp * 1000).toISOString(),
-        updated_at: new Date(updatedAtTimestamp * 1000).toISOString()
-      });
-    } else {
-      const currentTime = Math.floor(Date.now() / 1000);
-      orderTimestamp = currentTime;
-      createdAtTimestamp = currentTime;
-      updatedAtTimestamp = currentTime;
-    }
-
+    logger.log('createOrder called with:', JSON.stringify(createOrderDto));
     try {
       logger.log('Step 1: Checking for duplicate order');
-      const orderHash = `${createOrderDto.customer_id}:${orderTimestamp}:${createOrderDto.order_items
+      const orderHash = `${createOrderDto.customer_id}:${createOrderDto.order_time}:${createOrderDto.order_items
         .map(item => item.item_id)
         .sort()
         .join(',')}`;
@@ -670,44 +608,19 @@ export class OrdersService {
               OrderTrackingInfo.ORDER_PLACED) as OrderTrackingInfo,
             customerAddress: { id: customerAddress.id },
             restaurantAddress: { id: restaurantAddress.id },
-            order_time: orderTimestamp,
-            created_at: createdAtTimestamp,
-            updated_at: updatedAtTimestamp,
+            created_at: Math.floor(Date.now() / 1000),
+            updated_at: Math.floor(Date.now() / 1000),
             distance: Number(distance.toFixed(4))
           };
 
           // Lưu đơn hàng trước để có order_id
           logger.log('Saving order...');
-          const newOrder = new Order();
-          Object.assign(newOrder, orderData);
-
-          // Override timestamps if generated to bypass BeforeInsert hook
-          if (isGenerated) {
-            newOrder.created_at = createdAtTimestamp;
-            newOrder.updated_at = updatedAtTimestamp;
-            newOrder.order_time = orderTimestamp;
-            logger.log('Set generated timestamps on entity:', {
-              created_at: newOrder.created_at,
-              updated_at: newOrder.updated_at,
-              order_time: newOrder.order_time
-            });
-          }
-
+          const newOrder = this.ordersRepository.create(orderData as any);
           const savedOrder = await transactionalEntityManager.save(
             Order,
-            newOrder
+            newOrder as any
           );
           logger.log(`Order saved with id: ${savedOrder.id}`);
-
-          // Verify saved timestamps
-          if (isGenerated) {
-            logger.log('Verified saved timestamps:', {
-              created_at: savedOrder.created_at,
-              updated_at: savedOrder.updated_at,
-              order_time: savedOrder.order_time
-            });
-          }
-
           orderData.id = savedOrder.id;
 
           if (createOrderDto.payment_method === 'FWallet') {
@@ -978,9 +891,8 @@ export class OrdersService {
         restaurantAddress,
         customer_note: savedOrder.customer_note,
         customerAddress,
-        order_items: populatedOrderItems,
+        order_items: savedOrder.order_items,
         total_amount: savedOrder.total_amount,
-        total_restaurant_earn: restaurantSubTotal,
         delivery_fee: savedOrder.delivery_fee,
         service_fee: savedOrder.service_fee,
         promotions_applied: savedOrder.promotions_applied,
@@ -1012,16 +924,6 @@ export class OrdersService {
 
       logger.log(`Emit events took ${Date.now() - emitStart}ms`);
       logger.log(`Total execution took ${Date.now() - start}ms`);
-
-      // Update orders:all cache with new order
-      const allOrdersCacheKey = 'orders:all';
-      const cachedOrders = await redis.get(allOrdersCacheKey);
-      if (cachedOrders) {
-        const orders = JSON.parse(cachedOrders);
-        orders.push(result.data);
-        await redis.setEx(allOrdersCacheKey, 300, JSON.stringify(orders));
-        logger.log('Updated orders:all cache with new order');
-      }
 
       return result;
     } catch (error: any) {
@@ -1336,27 +1238,8 @@ export class OrdersService {
         'daily'
       );
       await this.driversGateway.notifyPartiesOnce(updatedOrder);
-
-      // Emit tip event for driver notification
-      this.eventEmitter.emit('driver.receivedTip', {
-        driverId: updatedOrder.driver_id,
-        orderId: updatedOrder.id,
-        tipAmount: tipAmount,
-        tipTime: Math.floor(Date.now() / 1000), // Unix timestamp in seconds
-        totalTips: updatedOrder.driver_tips,
-        orderDetails: {
-          id: updatedOrder.id,
-          customer_id: updatedOrder.customer_id,
-          restaurant_id: updatedOrder.restaurant_id,
-          status: updatedOrder.status,
-          tracking_info: updatedOrder.tracking_info,
-          total_amount: updatedOrder.total_amount,
-          delivery_fee: updatedOrder.delivery_fee
-        }
-      });
-
       logger.log(
-        `Emitted tip event for driver ${updatedOrder.driver_id} - tip: ${tipAmount} for order ${orderId}`
+        `Notified driver ${updatedOrder.driver_id} about tip of ${tipAmount} for order ${orderId}`
       );
 
       return createResponse('OK', updatedOrder, 'Driver tipped successfully');

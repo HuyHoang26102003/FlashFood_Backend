@@ -1,0 +1,23 @@
+export declare enum AdminRole {
+    SUPER_ADMIN = "SUPER_ADMIN",
+    COMPANION_ADMIN = "COMPANION_ADMIN",
+    FINANCE_ADMIN = "FINANCE_ADMIN"
+}
+export declare enum AdminPermission {
+    MANAGE_USERS = "MANAGE_USERS",
+    MANAGE_RESTAURANTS = "MANAGE_RESTAURANTS",
+    MANAGE_ORDERS = "MANAGE_ORDERS",
+    MANAGE_PROMOTIONS = "MANAGE_PROMOTIONS",
+    MANAGE_PAYMENTS = "MANAGE_PAYMENTS",
+    MANAGE_SUPPORT = "MANAGE_SUPPORT",
+    MANAGE_DRIVERS = "MANAGE_DRIVERS",
+    BAN_ACCOUNTS = "BAN_ACCOUNTS",
+    VIEW_ANALYTICS = "VIEW_ANALYTICS",
+    MANAGE_ADMINS = "MANAGE_ADMINS"
+}
+export declare enum AdminStatus {
+    ACTIVE = "ACTIVE",
+    INACTIVE = "INACTIVE",
+    SUSPENDED = "SUSPENDED"
+}
+export declare const RolePermissions: Record<AdminRole, AdminPermission[]>;

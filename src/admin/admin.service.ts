@@ -7,11 +7,7 @@ import { ApiResponse } from 'src/utils/createResponse';
 import { v4 as uuidv4 } from 'uuid';
 import { AdminRepository } from './admin.repository';
 import { UsersService } from '../users/users.service';
-import {
-  AdminPermission,
-  RolePermissions,
-  AdminRole
-} from 'src/utils/types/admin';
+import { AdminPermission, RolePermissions } from 'src/utils/types/admin';
 import { User } from 'src/users/entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { BannedAccount } from 'src/banned-account/entities/banned-account.entity';
@@ -98,24 +94,6 @@ export class AdminService {
     } catch (error: any) {
       console.log('error', error);
       return createResponse('ServerError', null, 'Error fetching admin');
-    }
-  }
-
-  async findAllByRole(role: AdminRole): Promise<ApiResponse<Admin[]>> {
-    try {
-      const admins = await this.adminRepository.findByRole(role);
-      return createResponse(
-        'OK',
-        admins,
-        `Admins with role ${role} retrieved successfully`
-      );
-    } catch (error: any) {
-      console.log('error', error);
-      return createResponse(
-        'ServerError',
-        null,
-        `Error fetching admins with role ${role}`
-      );
     }
   }
 

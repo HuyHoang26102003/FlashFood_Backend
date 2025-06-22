@@ -33,6 +33,30 @@ export class Driver {
   @Column()
   last_name: string;
 
+  @Column({ nullable: true })
+  email: string;
+
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
+  license_number: string;
+
+  @Column('jsonb', { nullable: true })
+  license_image: {
+    url: string;
+    key: string;
+  };
+
+  @Column({ nullable: true })
+  identity_card_number: string;
+
+  @Column('jsonb', { nullable: true })
+  identity_card_image: {
+    url: string;
+    key: string;
+  };
+
   @Column('jsonb', { nullable: true })
   avatar: {
     url: string;
@@ -61,11 +85,26 @@ export class Driver {
     brand: string;
     year: number;
     color: string;
+    type?: string;
     images?: { url: string; key: string }[]; // Thêm trường images
   };
 
   @Column('jsonb', { nullable: true })
+  vehicle_info: {
+    type: string;
+    license_plate: string;
+    model: string;
+    color: string;
+  };
+
+  @Column('jsonb', { nullable: true })
   current_location: {
+    lat: number;
+    lng: number;
+  };
+
+  @Column('jsonb', { nullable: true })
+  location: {
     lat: number;
     lng: number;
   };
@@ -89,6 +128,13 @@ export class Driver {
 
   @Column({ type: 'boolean', default: false })
   is_on_delivery: boolean;
+
+  @Column('jsonb', { nullable: true })
+  status: {
+    is_active: boolean;
+    is_available: boolean;
+    is_verified: boolean;
+  };
 
   @Column({ type: 'int', default: 0 })
   active_points: number;
@@ -116,5 +162,34 @@ export class Driver {
     this.id = `FF_DRI_${uuidv4()}`;
     this.created_at = Math.floor(Date.now() / 1000);
     this.updated_at = Math.floor(Date.now() / 1000);
+    this.last_login = Math.floor(Date.now() / 1000);
+
+    // Initialize default values
+    if (this.available_for_work === undefined) this.available_for_work = false;
+    if (this.is_on_delivery === undefined) this.is_on_delivery = false;
+    if (this.active_points === undefined) this.active_points = 0;
+
+    // Map vehicle_info to vehicle if provided
+    if (this.vehicle_info && !this.vehicle) {
+      this.vehicle = {
+        license_plate: this.vehicle_info.license_plate,
+        model: this.vehicle_info.model,
+        color: this.vehicle_info.color,
+        type: this.vehicle_info.type,
+        owner: '',
+        brand: '',
+        year: new Date().getFullYear()
+      };
+    }
+
+    // Map location to current_location if provided
+    if (this.location && !this.current_location) {
+      this.current_location = this.location;
+    }
+
+    // Set default status values
+    if (this.status) {
+      this.available_for_work = this.status.is_available || false;
+    }
   }
 }

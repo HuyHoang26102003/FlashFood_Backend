@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { CustomersController } from './customers.controller';
+import { CustomersControllerFake } from './customers.controller.fake';
 import { User } from '../users/entities/user.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -30,9 +31,6 @@ import { Promotion } from 'src/promotions/entities/promotion.entity';
 import { Notification } from 'src/notifications/entities/notification.entity';
 import { NotificationsRepository } from 'src/notifications/notifications.repository';
 import { RedisService } from 'src/redis/redis.service';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { AdminRepository } from 'src/admin/admin.repository';
-import { Admin } from 'src/admin/entities/admin.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -40,7 +38,6 @@ import { Admin } from 'src/admin/entities/admin.entity';
       AddressBook,
       FoodCategory,
       Restaurant,
-      Admin,
       Customer,
       Promotion,
       CartItem,
@@ -52,12 +49,10 @@ import { Admin } from 'src/admin/entities/admin.entity';
     AddressBookModule,
     forwardRef(() => RestaurantsModule)
   ],
-  controllers: [CustomersController],
+  controllers: [CustomersController, CustomersControllerFake],
   providers: [
     CustomersService,
     AddressBookService,
-    NotificationsService,
-    AdminRepository,
     CustomersGateway,
     UserRepository,
     RedisService,

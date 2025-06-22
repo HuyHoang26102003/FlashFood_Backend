@@ -72,7 +72,6 @@ export class CustomerCaresRepository {
     console.log('check bla', bla);
     return bla;
   }
-
   async findByUserId(userId: string): Promise<CustomerCare> {
     console.log('check condition', { user_id: userId });
     const bla = await this.repository
@@ -103,31 +102,10 @@ export class CustomerCaresRepository {
     skip: number,
     limit: number
   ): Promise<[CustomerCare[], number]> {
-    const result = await this.repository
-      .createQueryBuilder('customerCare')
-      .leftJoin(
-        'banned_accounts',
-        'ban',
-        'ban.entity_id = customerCare.id AND ban.entity_type = :entityType',
-        {
-          entityType: 'CustomerCare'
-        }
-      )
-      .addSelect(
-        'CASE WHEN ban.id IS NOT NULL THEN true ELSE false END',
-        'customer_care_is_banned'
-      )
-      .skip(skip)
-      .take(limit)
-      .getRawAndEntities();
-
-    const customerCares = result.entities.map((customerCare, index) => {
-      (customerCare as any).is_banned =
-        result.raw[index]?.customer_care_is_banned || false;
-      return customerCare;
+    return await this.repository.findAndCount({
+      skip,
+      take: limit,
+      relations: ['user']
     });
-
-    const total = await this.repository.count();
-    return [customerCares, total];
   }
 }

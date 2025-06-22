@@ -20,14 +20,8 @@ export class OrdersController {
 
   // Create a new order
   @Post()
-  async createOrder(
-    @Body() createOrderDto: CreateOrderDto,
-    @Query('is-generated') isGenerated?: string
-  ): Promise<any> {
-    return await this.ordersService.createOrder(
-      createOrderDto,
-      isGenerated === 'true'
-    );
+  async createOrder(@Body() createOrderDto: CreateOrderDto): Promise<any> {
+    return await this.ordersService.createOrder(createOrderDto);
   }
 
   @Post('tip')
@@ -39,7 +33,11 @@ export class OrdersController {
   @Get()
   async findAll(): Promise<Promise<any>> {
     const orders = await this.ordersService.findAll();
-    return orders;
+    return {
+      status: 'OK',
+      data: orders,
+      message: 'Orders retrieved successfully'
+    };
   }
 
   @Get('paginated')

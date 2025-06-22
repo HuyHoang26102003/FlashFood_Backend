@@ -61,6 +61,6 @@ export class Notification {
   @BeforeInsert()
   generateId() {
     this.id = `NOTI_${uuidv4()}`;
-    this.created_at = Date.now(); // Use milliseconds as per codebase memory
+    this.created_at = Math.floor(Date.now() / 1000);
   }
 }

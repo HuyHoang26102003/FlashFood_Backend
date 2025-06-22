@@ -3,6 +3,19 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "assets": ["**/*.hbs", "**/*.ejs"],
+    "watchAssets": true
+  },
+  "projects": {
+    "fake-backend": {
+      "type": "application",
+      "root": "src2",
+      "entryFile": "main",
+      "sourceRoot": "src2",
+      "compilerOptions": {
+        "tsConfigPath": "src2/tsconfig.json"
+      }
+    }
   }
 }

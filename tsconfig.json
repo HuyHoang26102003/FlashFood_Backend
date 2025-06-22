@@ -21,5 +21,7 @@
     "esModuleInterop": true,
     "moduleResolution": "node",
     "strict": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src2/**/*", "node_modules", "dist"]
 }

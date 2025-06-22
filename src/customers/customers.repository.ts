@@ -348,32 +348,10 @@ export class CustomersRepository {
     skip: number,
     limit: number
   ): Promise<[Customer[], number]> {
-    const result = await this.customerRepository
-      .createQueryBuilder('customer')
-      .leftJoin(
-        'banned_accounts',
-        'ban',
-        'ban.entity_id = customer.id AND ban.entity_type = :entityType',
-        {
-          entityType: 'Customer'
-        }
-      )
-      .addSelect(
-        'CASE WHEN ban.id IS NOT NULL THEN true ELSE false END',
-        'customer_is_banned'
-      )
-      .leftJoinAndSelect('customer.user', 'user')
-      .skip(skip)
-      .take(limit)
-      .getRawAndEntities();
-
-    const customers = result.entities.map((customer, index) => {
-      (customer as any).is_banned =
-        result.raw[index]?.customer_is_banned || false;
-      return customer;
+    return await this.customerRepository.findAndCount({
+      skip,
+      take: limit,
+      relations: ['user']
     });
-
-    const total = await this.customerRepository.count();
-    return [customers, total];
   }
 }

@@ -73,9 +73,6 @@ import { CustomerCareInquiry } from './customer_cares_inquires/entities/customer
 import { RestaurantStatsModule } from './restaurant_stats_records/restaurant_stats_records.module';
 import { OrdersService } from './orders/orders.service';
 import { AdminChartModule } from './admin_chart/admin_chart.module';
-import { NotificationsService } from './notifications/notifications.service';
-import { NotificationsRepository } from './notifications/notifications.repository';
-import { Notification } from './notifications/entities/notification.entity';
 
 @Global()
 @Module({
@@ -96,7 +93,6 @@ import { Notification } from './notifications/entities/notification.entity';
     TypeOrmModule.forFeature([
       FoodCategory,
       Driver,
-      Notification,
       OnlineSession,
       CustomerCareInquiry,
       Order,
@@ -168,8 +164,6 @@ import { Notification } from './notifications/entities/notification.entity';
     AppService,
     FoodCategoriesRepository,
     EmailService,
-    NotificationsService,
-    NotificationsRepository,
     DriversGateway,
     CustomersGateway,
     AdminGateway,

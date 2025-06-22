@@ -22,19 +22,11 @@ export class AdminChartRecord {
   @Column({ type: 'bigint' })
   period_end: number; // End timestamp of the period
 
-  @Column('jsonb', { nullable: true })
-  total_users: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Gross revenue from promotions with monthly comparison
+  @Column({ type: 'integer', default: 0 })
+  total_users: number; // Total number of users in the system
 
-  @Column('jsonb', { nullable: true })
-  sold_promotions: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Gross revenue from promotions with monthly comparison
+  @Column({ type: 'integer', default: 0 })
+  sold_promotions: number; // Total number of promotions sold
 
   @Column('jsonb', { nullable: true })
   net_income: {
@@ -64,47 +56,23 @@ export class AdminChartRecord {
     customer_care: number;
   }[]; // User growth rate by type
 
-  @Column('jsonb', { nullable: true })
-  gross_from_promotion: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Gross revenue from promotions with monthly comparison
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  gross_from_promotion: number; // Gross revenue from promotions
 
-  @Column('jsonb', { nullable: true })
-  average_customer_satisfaction: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Average customer satisfaction rating with monthly comparison
+  @Column({ type: 'float', default: 0 })
+  average_customer_satisfaction: number; // Average customer satisfaction rating
 
-  @Column('jsonb', { nullable: true })
-  average_delivery_time: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Average delivery time in seconds with monthly comparison
+  @Column({ type: 'integer', default: 0 })
+  average_delivery_time: number; // Average delivery time in seconds
 
-  @Column('jsonb', { nullable: true })
-  order_cancellation_rate: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Order cancellation rate with monthly comparison
+  @Column({ type: 'float', default: 0 })
+  order_cancellation_rate: number; // Order cancellation rate
 
-  @Column('jsonb', { nullable: true })
-  order_volume: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Total order volume with monthly comparison
+  @Column({ type: 'integer', default: 0 })
+  order_volume: number; // Total order volume
 
-  @Column('jsonb', { nullable: true })
-  churn_rate: {
-    metric: number;
-    monthlyChanges: number;
-    changeType: 'real' | 'percentage';
-  }; // Customer churn rate with monthly comparison
+  @Column({ type: 'float', default: 0 })
+  churn_rate: number; // Customer churn rate
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

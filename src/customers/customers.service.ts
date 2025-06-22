@@ -15,7 +15,7 @@ import { CustomersRepository } from './customers.repository';
 import { FoodCategory } from 'src/food_categories/entities/food_category.entity';
 // import { OrdersRepository } from 'src/orders/orders.repository';
 import { MenuItem } from 'src/menu_items/entities/menu_item.entity';
-import { DataSource, ILike, In } from 'typeorm';
+import { DataSource, ILike, In, Raw } from 'typeorm';
 import { Order } from 'src/orders/entities/order.entity';
 import { NotificationsRepository } from 'src/notifications/notifications.repository';
 import { RatingsReview } from 'src/ratings_reviews/entities/ratings_review.entity';
@@ -1075,20 +1075,21 @@ export class CustomersService {
       }
 
       // Lấy thông báo chỉ định riêng cho customer (target_user_id = customerId)
-      const specificNotifications =
-        await this.notificationsRepository.findSpecificNotifications(
-          customerId
-        );
+      const specificNotifications = await this.notificationsRepository.findAll({
+        where: { target_user_id: customerId },
+        relations: ['created_by']
+      });
 
       // Lấy thông báo broadcast cho vai trò CUSTOMER
-      // Use query builder instead of Raw for better array handling
-      console.log('Fetching broadcast notifications for CUSTOMER...');
-      const broadcastNotifications =
-        await this.notificationsRepository.findBroadcastNotifications(
-          'CUSTOMER'
-        );
-      console.log(
-        `Found ${broadcastNotifications.length} broadcast notifications`
+      const broadcastNotifications = await this.notificationsRepository.findAll(
+        {
+          where: {
+            target_user: Raw(
+              alias => `'CUSTOMER' = ANY(${alias})` // Thủ công viết điều kiện cho cột mảng
+            )
+          },
+          relations: ['created_by']
+        }
       );
 
       // Gộp hai danh sách thông báo và loại bỏ trùng lặp

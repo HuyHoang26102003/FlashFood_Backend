@@ -59,7 +59,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
     ]),
     UsersModule
   ],
-  controllers: [AdminController, AdminFakeController],
+  controllers: [AdminController, AdminControllerFake],
   providers: [
     {
       provide: 'MAIL_TRANSPORT',

@@ -137,7 +137,6 @@ import { CustomerCareInquiriesRepository } from 'src/customer_cares_inquires/cus
     DriverStatsService,
     RatingsReviewsRepository,
     AdminRepository,
-    NotificationsService,
     FinanceRulesService,
     CustomerCaresRepository,
     AdminService,

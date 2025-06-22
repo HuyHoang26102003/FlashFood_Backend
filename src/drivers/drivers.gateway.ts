@@ -32,17 +32,14 @@ import { DriverStatsService } from 'src/driver_stats_records/driver_stats_record
 import { FinanceRulesService } from 'src/finance_rules/finance_rules.service';
 import { FWalletsRepository } from 'src/fwallets/fwallets.repository';
 import { TransactionService } from 'src/transactions/transactions.service';
-import { FLASHFOOD_FINANCE, ADMIN_MOCK } from 'src/utils/constants';
+import { FLASHFOOD_FINANCE } from 'src/utils/constants';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { TargetUser } from 'src/notifications/entities/notification.entity';
 import { RedisService } from 'src/redis/redis.service';
 import { Logger } from '@nestjs/common';
 import { UserRepository } from 'src/users/users.repository';
 import { Transaction } from 'src/transactions/entities/transaction.entity';
 import * as fs from 'fs';
 import * as path from 'path';
-import { IMAGE_LINKS } from 'src/assets/image_urls';
 
 const logger = new Logger('DriversGateway');
 
@@ -115,8 +112,7 @@ export class DriversGateway
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     @Inject(forwardRef(() => UserRepository))
-    private readonly userRepository: UserRepository,
-    private readonly notificationsService: NotificationsService
+    private readonly userRepository: UserRepository
   ) {
     logger.log('DriversGateway constructor called');
     logger.log('Checking injected dependencies:');
@@ -202,16 +198,9 @@ export class DriversGateway
       'order.assignedToDriver',
       this.handleOrderAssignedToDriver.bind(this)
     );
-
-    this.eventEmitter.removeAllListeners('driver.receivedTip');
-    this.eventEmitter.on(
-      'driver.receivedTip',
-      this.handleDriverReceivedTip.bind(this)
-    );
-
     this.isListenerRegistered = true;
     console.log(
-      '[DriversGateway] Registered event listeners for order.assignedToDriver and driver.receivedTip'
+      '[DriversGateway] Registered event listener for order.assignedToDriver'
     );
   }
 
@@ -220,16 +209,12 @@ export class DriversGateway
       'order.assignedToDriver',
       this.handleOrderAssignedToDriver.bind(this)
     );
-    this.eventEmitter.removeListener(
-      'driver.receivedTip',
-      this.handleDriverReceivedTip.bind(this)
-    );
     this.isListenerRegistered = false;
     if (this.redisClient && this.redisClient.isOpen) {
       await this.redisClient.quit();
     }
     console.log(
-      '[DriversGateway] Removed event listeners and closed Redis connection'
+      '[DriversGateway] Removed event listener and closed Redis connection'
     );
   }
 
@@ -1535,13 +1520,11 @@ export class DriversGateway
 
                     // CRITICAL FIX: Apply same comprehensive emit pattern as driverAcceptOrder
                     this.eventEmitter.emit('listenUpdateOrderTracking', {
-                      ...order,
                       orderId: order.id,
                       status: completedOrderStatus,
                       tracking_info: completedOrderTrackingInfo,
                       updated_at: timestamp,
                       customer_id: order.customer_id,
-                      order_items: order.order_items,
                       driver_id: order.driver_id,
                       restaurant_id: order.restaurant_id,
                       restaurant_avatar: order.restaurant?.avatar || null,
@@ -1678,8 +1661,6 @@ export class DriversGateway
                           // Emit for next order
                           // CRITICAL FIX: Apply same comprehensive emit pattern as driverAcceptOrder
                           this.eventEmitter.emit('listenUpdateOrderTracking', {
-                            ...order,
-                            order_items: nextOrder.order_items,
                             orderId: nextOrder.id,
                             status: savedNextOrder.status,
                             tracking_info: savedNextOrder.tracking_info,
@@ -1932,10 +1913,8 @@ export class DriversGateway
 
                     // CRITICAL FIX: Apply same comprehensive emit pattern as driverAcceptOrder
                     this.eventEmitter.emit('listenUpdateOrderTracking', {
-                      ...order,
                       orderId: order.id,
                       status: savedOrder.status,
-                      order_items: order.order_items,
                       tracking_info: savedOrder.tracking_info,
                       updated_at: savedOrder.updated_at,
                       customer_id: order.customer_id,
@@ -2158,19 +2137,10 @@ export class DriversGateway
                       );
 
                       this.eventEmitter.emit('listenUpdateOrderTracking', {
-                        order_items: order.order_items,
                         orderId: order.id,
                         status: savedNextOrder.status,
                         tracking_info: savedNextOrder.tracking_info,
-                        updated_at: savedNextOrder.updated_at,
-                        customer_id: order.customer_id,
-                        driver_id: order.driver_id,
-                        restaurant_id: order.restaurant_id,
-                        restaurant_avatar: order.restaurant?.avatar || null,
-                        driver_avatar: null,
-                        restaurantAddress: order.restaurantAddress,
-                        customerAddress: order.customerAddress,
-                        driverDetails: null
+                        updated_at: savedNextOrder.updated_at
                       });
 
                       // FIXED: Also notify all parties for multi-order updates
@@ -2768,8 +2738,6 @@ export class DriversGateway
 
           // Notify customer about order acceptance
           this.eventEmitter.emit('listenUpdateOrderTracking', {
-            ...orderWithRelations,
-            order_items: orderWithRelations.order_items,
             orderId: orderWithRelations.id,
             status: orderWithRelations.status,
             tracking_info: orderWithRelations.tracking_info,
@@ -2887,7 +2855,6 @@ export class DriversGateway
     try {
       const driverId = orderAssignment.driverListenerId;
       if (!driverId) throw new WsException('Driver ID is required');
-      console.log('cehck what order here in dg', orderAssignment);
 
       const order = await this.ordersService.findOne(orderAssignment.id);
 
@@ -2908,7 +2875,6 @@ export class DriversGateway
           event: 'incomingOrderForDriver',
           data: {
             ...driverNotificationData,
-            distance: orderAssignment.distance,
             driver_wage: orderAssignment.driver_wage,
             driver_earn: orderAssignment.driver_wage
           },
@@ -2930,70 +2896,6 @@ export class DriversGateway
       );
     }
   }
-
-  @OnEvent('driver.receivedTip')
-  async handleDriverReceivedTip(tipData: any) {
-    try {
-      const { driverId, orderId, tipAmount, tipTime, totalTips, orderDetails } =
-        tipData;
-
-      if (!driverId) {
-        console.error(
-          '[DriversGateway] Driver ID is required for tip notification'
-        );
-        return;
-      }
-
-      console.log(
-        `[DriversGateway] Processing tip notification for driver ${driverId}:`,
-        {
-          orderId,
-          tipAmount,
-          totalTips
-        }
-      );
-
-      // Get connected clients for the driver
-      const clients = await this.server.in(`driver_${driverId}`).fetchSockets();
-      console.log(
-        `[DriversGateway] Emitting tip notification to room driver_${driverId}, clients: ${clients.length}`
-      );
-
-      if (clients.length === 0) {
-        console.log(
-          `[DriversGateway] No connected clients for driver ${driverId}, tip notification not sent`
-        );
-        return;
-      }
-
-      // Emit tip notification to the driver
-      this.server.to(`driver_${driverId}`).emit('tipReceived', {
-        event: 'tipReceived',
-        data: {
-          orderId,
-          tipAmount,
-          tipTime,
-          totalTips,
-          orderDetails,
-          message: `You received a tip of $${tipAmount}! 🎉`
-        },
-        message: `Tip received: $${tipAmount}`
-      });
-
-      console.log(
-        `[DriversGateway] Successfully emitted tip notification to driver ${driverId} - Amount: $${tipAmount}`
-      );
-
-      return { event: 'tipNotified', data: { success: true } };
-    } catch (error: any) {
-      console.error(
-        '[DriversGateway] Error handling driver.receivedTip:',
-        error
-      );
-      // Don't throw error to avoid breaking the tip flow
-    }
-  }
-
   private async handleDeliveryCompletion(
     order: Order,
     dps: DriverProgressStage,
@@ -3240,116 +3142,6 @@ export class DriversGateway
       if (lockAcquired) {
         await this.redisService.del(lockKey);
       }
-    }
-
-    // Create notifications for order completion
-    await this.createDeliveryCompletionNotifications(
-      order,
-      transactionalEntityManager
-    );
-  }
-
-  private async createDeliveryCompletionNotifications(
-    order: Order,
-    transactionalEntityManager: EntityManager
-  ): Promise<void> {
-    try {
-      logToFile('Creating delivery completion notifications', {
-        orderId: order.id,
-        customerId: order.customer_id,
-        restaurantId: order.restaurant_id
-      });
-
-      // Get order with relations for notification content
-      const orderWithRelations = await transactionalEntityManager
-        .getRepository(Order)
-        .findOne({
-          where: { id: order.id },
-          relations: ['customer', 'restaurant']
-        });
-
-      if (!orderWithRelations) {
-        logToFile('Order not found for notifications', { orderId: order.id });
-        return;
-      }
-
-      const timestamp = Date.now(); // Use milliseconds for notifications
-
-      // Create customer notification
-      if (orderWithRelations.customer) {
-        const customerNotificationData = {
-          avatar: {
-            url: IMAGE_LINKS.ORDER_DELIVERED,
-            key: 'delivery-success'
-          },
-          title: 'Order Delivered Successfully! 🎉',
-          desc: `Your order #${order.id} has been delivered successfully. Thank you for choosing FlashFood!`,
-          image: null,
-          link: `/orders/${order.id}`,
-          target_user: [TargetUser.CUSTOMER],
-          created_by_id: ADMIN_MOCK.admin_id,
-          target_user_id: orderWithRelations.customer.id
-        };
-
-        const customerNotificationResponse =
-          await this.notificationsService.create(customerNotificationData);
-
-        if (customerNotificationResponse.EC === 0) {
-          logToFile('Customer notification created successfully', {
-            orderId: order.id,
-            customerId: orderWithRelations.customer.id,
-            notificationId: customerNotificationResponse.data.id
-          });
-        } else {
-          logToFile('Failed to create customer notification', {
-            orderId: order.id,
-            customerId: orderWithRelations.customer.id,
-            error: customerNotificationResponse.EM
-          });
-        }
-      }
-
-      // Create restaurant notification
-      if (orderWithRelations.restaurant) {
-        const restaurantNotificationData = {
-          avatar: {
-            url: IMAGE_LINKS.ORDER_DELIVERED,
-            key: 'delivery-complete'
-          },
-          title: 'Order Delivered to Customer! ✅',
-          desc: `Order #${order.id} has been successfully delivered to your customer. Great job!`,
-          image: null,
-          link: `/orders/${order.id}`,
-          target_user: [TargetUser.RESTAURANT],
-          created_by_id: ADMIN_MOCK.admin_id,
-          target_user_id: orderWithRelations.restaurant.id
-        };
-
-        const restaurantNotificationResponse =
-          await this.notificationsService.create(restaurantNotificationData);
-
-        if (restaurantNotificationResponse.EC === 0) {
-          logToFile('Restaurant notification created successfully', {
-            orderId: order.id,
-            restaurantId: orderWithRelations.restaurant.id,
-            notificationId: restaurantNotificationResponse.data.id
-          });
-        } else {
-          logToFile('Failed to create restaurant notification', {
-            orderId: order.id,
-            restaurantId: orderWithRelations.restaurant.id,
-            error: restaurantNotificationResponse.EM
-          });
-        }
-      }
-    } catch (error: any) {
-      logToFile('Error creating delivery completion notifications', {
-        orderId: order.id,
-        error: error.message,
-        stack: error.stack
-      });
-      // Don't throw error to avoid breaking the main delivery completion flow
-      console.error('Error creating delivery completion notifications:', error);
     }
   }
 

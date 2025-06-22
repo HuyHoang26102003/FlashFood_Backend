@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as bcryptjs from 'bcryptjs';
 import { createResponse } from 'src/utils/createResponse';
 import { Enum_UserType, BasePayload } from 'src/types/Payload';
-import { AdminRole, AdminStatus, RolePermissions } from 'src/utils/types/admin';
+import { AdminRole, AdminStatus } from 'src/utils/types/admin';
 import { CreateFWalletDto } from 'src/fwallets/dto/create-fwallet.dto';
 import { CreateRestaurantDto } from 'src/restaurants/dto/create-restaurant.dto';
 import { User } from 'src/users/entities/user.entity';
@@ -35,11 +35,7 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2
   ) {}
 
-  async register(
-    userData: any,
-    type: Enum_UserType,
-    isGenerated?: string
-  ): Promise<any> {
+  async register(userData: any, type: Enum_UserType): Promise<any> {
     console.log('Starting registration process with data:', { userData, type });
 
     const { email, password, phone } = userData;
@@ -60,22 +56,16 @@ export class AuthService {
 
     if (existingUser) {
       console.log('Found existing user, handling existing user registration');
-      return this.handleExistingUserRegistration(
-        existingUser,
-        userData,
-        type,
-        isGenerated
-      );
+      return this.handleExistingUserRegistration(existingUser, userData, type);
     }
 
     console.log('No existing user found, creating new registration');
-    return this.createNewUserRegistration(userData, type, phone, isGenerated);
+    return this.createNewUserRegistration(userData, type, phone);
   }
 
   async login(
     { email, password }: { email: string; password: string },
-    type: Enum_UserType,
-    isGenerated?: string
+    type: Enum_UserType
   ): Promise<any> {
     if (!this.validateLoginInput(email, password)) {
       return createResponse(
@@ -91,7 +81,7 @@ export class AuthService {
     }
 
     const basePayload = this.createBasePayload(user);
-    return this.handleUserTypeLogin(user, type, basePayload, isGenerated);
+    return this.handleUserTypeLogin(user, type, basePayload);
   }
 
   // Private helper methods
@@ -140,38 +130,22 @@ export class AuthService {
   private async handleUserTypeLogin(
     user: User,
     type: Enum_UserType,
-    basePayload: BasePayload,
-    isGenerated?: string
+    basePayload: BasePayload
   ) {
     const loginHandlers = {
-      DRIVER: () => this.handleDriverLogin(user, basePayload, isGenerated),
-      CUSTOMER: () => this.handleCustomerLogin(user, basePayload, isGenerated),
-      F_WALLET: () => this.handleFWalletLogin(user, basePayload, isGenerated),
+      DRIVER: () => this.handleDriverLogin(user, basePayload),
+      CUSTOMER: () => this.handleCustomerLogin(user, basePayload),
+      F_WALLET: () => this.handleFWalletLogin(user, basePayload),
       RESTAURANT_OWNER: () =>
-        this.handleRestaurantOwnerLogin(user, basePayload, isGenerated),
+        this.handleRestaurantOwnerLogin(user, basePayload),
       CUSTOMER_CARE_REPRESENTATIVE: () =>
-        this.handleCustomerCareLogin(user, basePayload, isGenerated),
+        this.handleCustomerCareLogin(user, basePayload),
       SUPER_ADMIN: () =>
-        this.handleAdminLogin(
-          user,
-          basePayload,
-          Enum_UserType.SUPER_ADMIN,
-          isGenerated
-        ),
+        this.handleAdminLogin(user, basePayload, Enum_UserType.SUPER_ADMIN),
       FINANCE_ADMIN: () =>
-        this.handleAdminLogin(
-          user,
-          basePayload,
-          Enum_UserType.FINANCE_ADMIN,
-          isGenerated
-        ),
+        this.handleAdminLogin(user, basePayload, Enum_UserType.FINANCE_ADMIN),
       COMPANION_ADMIN: () =>
-        this.handleAdminLogin(
-          user,
-          basePayload,
-          Enum_UserType.COMPANION_ADMIN,
-          isGenerated
-        )
+        this.handleAdminLogin(user, basePayload, Enum_UserType.COMPANION_ADMIN)
     };
 
     const handler = loginHandlers[type];
@@ -182,11 +156,7 @@ export class AuthService {
     return handler();
   }
 
-  private async handleDriverLogin(
-    user: User,
-    basePayload: BasePayload,
-    isGenerated?: string
-  ) {
+  private async handleDriverLogin(user: User, basePayload: BasePayload) {
     const userWithRole = await this.driverRepository.findOne({
       user_id: user.id
     });
@@ -199,12 +169,6 @@ export class AuthService {
     if (!fWalletData) {
       return createResponse('NotFound', null, 'Driver not found');
     }
-
-    // Update last login timestamp
-    const timestamps = this.generateRandomTimestamps(isGenerated);
-    await this.driverRepository.update(userWithRole.id, {
-      last_login: timestamps.last_login
-    });
 
     const driverPayload = {
       ...basePayload,
@@ -235,28 +199,29 @@ export class AuthService {
     );
   }
 
-  private async handleCustomerLogin(
-    user: User,
-    basePayload: BasePayload,
-    isGenerated?: string
-  ) {
+  private async handleCustomerLogin(user: User, basePayload: BasePayload) {
     try {
       console.log('check user', user, 'chekc user id', user.id);
 
-      // Fetch customer data
-      console.log('Fetching customer data for user ID:', user.id);
-      const userWithRole = await this.customersRepository.findByUserId(user.id);
-      console.log(
-        'Customer data fetched:',
-        userWithRole ? 'Found' : 'Not found'
-      );
+      // Fetch customer data with timeout
+      const userWithRole = await (Promise.race([
+        this.customersRepository.findByUserId(user.id),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Customer lookup timeout')), 2000)
+        )
+      ]) as Promise<Customer>);
 
       if (!userWithRole) {
         return createResponse('NotFound', null, 'Customer not found');
       }
 
-      // Fetch wallet data
-      const fwallet = await this.fWalletsRepository.findByUserId(user.id);
+      // Fetch wallet data with timeout
+      const fwallet = await (Promise.race([
+        this.fWalletsRepository.findByUserId(user.id),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Wallet lookup timeout')), 5000)
+        )
+      ]) as Promise<FWallet>);
 
       if (!fwallet) {
         return createResponse(
@@ -272,9 +237,8 @@ export class AuthService {
       console.log('Skipping cart items loading to prevent hanging');
 
       // Update last login timestamp
-      const timestamps = this.generateRandomTimestamps(isGenerated);
       await this.customersRepository.update(userWithRole.id, {
-        last_login: timestamps.last_login
+        last_login: Math.floor(Date.now() / 1000)
       });
 
       // Construct payload
@@ -291,7 +255,7 @@ export class AuthService {
         user_id: user.id,
         avatar: userWithRole.avatar,
         support_tickets: userWithRole.support_tickets || [],
-        address: userWithRole.address || [],
+        address: userWithRole.address || {},
         cart_items: cartItems?.data || []
       };
 
@@ -317,13 +281,7 @@ export class AuthService {
     }
   }
 
-  private async handleFWalletLogin(
-    user: User,
-    basePayload: BasePayload,
-    isGenerated?: string
-  ) {
-    // FWallet doesn't have last_login field, but we use the parameter for consistency
-    console.log('FWallet login, isGenerated:', isGenerated);
+  private async handleFWalletLogin(user: User, basePayload: BasePayload) {
     const userWithRole = await this.fWalletsRepository.findByUserId(user.id);
     if (!userWithRole) {
       return createResponse('NotFound', null, 'FWallet not found');
@@ -348,12 +306,9 @@ export class AuthService {
 
   private async handleRestaurantOwnerLogin(
     user: User,
-    basePayload: BasePayload,
-    isGenerated?: string
+    basePayload: BasePayload
   ) {
     try {
-      // Restaurant owner doesn't have last_login field in current schema
-      console.log('Restaurant owner login, isGenerated:', isGenerated);
       // Find restaurant without loading problematic relations
       const userWithRole = await this.restaurantsRepository.findByOwnerId(
         user.id
@@ -412,25 +367,17 @@ export class AuthService {
     }
   }
 
-  private async handleCustomerCareLogin(
-    user: User,
-    basePayload: BasePayload,
-    isGenerated?: string
-  ) {
-    // Update last login for customer care
-    console.log('Customer care login, isGenerated:', isGenerated);
+  private async handleCustomerCareLogin(user: User, basePayload: BasePayload) {
     const userWithRole = await this.customerCareRepository.findByUserId(
       user.id
     );
     if (!userWithRole) {
-      return createResponse('NotFound', null, 'Customer care not found');
+      return createResponse(
+        'NotFound',
+        null,
+        'Customer Care representative not found'
+      );
     }
-
-    // Update last login timestamp
-    const timestamps = this.generateRandomTimestamps(isGenerated);
-    await this.customerCareRepository.update(userWithRole.id, {
-      last_login: timestamps.last_login
-    });
 
     const customerCarePayload = {
       ...basePayload,
@@ -461,11 +408,8 @@ export class AuthService {
   private async handleAdminLogin(
     user: User,
     basePayload: BasePayload,
-    type: Enum_UserType,
-    isGenerated?: string
+    type: Enum_UserType
   ) {
-    // Admin doesn't have last_login field in current schema
-    console.log('Admin login, isGenerated:', isGenerated);
     const admin = await this.adminService.findOneByUserId(user.id);
     if (!admin.data) {
       return createResponse('NotFound', null, `${type} not found`);
@@ -506,11 +450,8 @@ export class AuthService {
   private async handleExistingUserRegistration(
     existingUser: User,
     userData: any,
-    type: Enum_UserType,
-    isGenerated?: string
+    type: Enum_UserType
   ) {
-    const timestamps = this.generateRandomTimestamps(isGenerated);
-
     if (existingUser && Array.isArray(existingUser.user_type)) {
       const userTypes = existingUser.user_type.map(t => String(t));
       if (userTypes.includes(String(type))) {
@@ -527,23 +468,10 @@ export class AuthService {
 
     switch (type as Enum_UserType) {
       case Enum_UserType.CUSTOMER:
-        const customerFWalletData: CreateFWalletDto = {
-          user_id: existingUser.id,
-          email: existingUser.email,
-          password: existingUser.password,
-          first_name: userData.first_name,
-          last_name: userData.last_name,
-          balance: isGenerated === 'true' ? 999999 : 0
-        };
-
-        fWallet = await this.fWalletsRepository.create(customerFWalletData);
         newUserWithRole = await this.customersRepository.create({
           ...userData,
           password: existingUser.password,
-          user_id: existingUser.id,
-          created_at: timestamps.created_at,
-          updated_at: timestamps.updated_at,
-          last_login: timestamps.last_login
+          user_id: existingUser.id
         });
         break;
 
@@ -554,7 +482,7 @@ export class AuthService {
             ...userData,
             password: existingUser.password,
             user_id: existingUser.id,
-            balance: isGenerated === 'true' ? 999999 : 0
+            balance: 0
           });
           if (!existingUser.user_type.includes(Enum_UserType.F_WALLET)) {
             existingUser.user_type.push(Enum_UserType.F_WALLET);
@@ -587,10 +515,7 @@ export class AuthService {
           rating: {
             average_rating: 0,
             review_count: 0
-          },
-          created_at: timestamps.created_at,
-          updated_at: timestamps.updated_at,
-          last_login: timestamps.last_login
+          }
         });
 
         // Get complete driver data
@@ -639,7 +564,7 @@ export class AuthService {
             password: existingUser.password,
             first_name: userData.first_name,
             last_name: userData.last_name,
-            balance: isGenerated === 'true' ? 999999 : 0
+            balance: 0
           };
 
           console.log('Creating FWallet with data:', fWalletData);
@@ -726,7 +651,7 @@ export class AuthService {
           ...userData,
           password: existingUser.password,
           user_id: existingUser.id,
-          balance: isGenerated === 'true' ? 999999 : 0
+          balance: 0
         });
         break;
 
@@ -844,8 +769,7 @@ export class AuthService {
   private async createNewUserRegistration(
     userData: any,
     type: Enum_UserType,
-    phone: string,
-    isGenerated?: string
+    phone: string
   ) {
     console.log('=== Starting createNewUserRegistration ===');
     console.log('Input data:', { userData, type, phone });
@@ -871,7 +795,6 @@ export class AuthService {
         type
       });
 
-      const timestamps = this.generateRandomTimestamps(isGenerated);
       const newUserData = {
         id: `USR_${uuidv4()}`,
         email,
@@ -881,8 +804,8 @@ export class AuthService {
         last_name: userData.last_name,
         verification_code: Math.floor(Math.random() * 1000000),
         is_verified: false,
-        created_at: new Date(timestamps.created_at * 1000),
-        updated_at: new Date(timestamps.updated_at * 1000),
+        created_at: new Date(),
+        updated_at: new Date(),
         user_type: [type]
       };
 
@@ -903,7 +826,7 @@ export class AuthService {
               password: newUserData.password,
               first_name: userData.first_name,
               last_name: userData.last_name,
-              balance: isGenerated === 'true' ? 999999 : 0
+              balance: 0
             };
 
             console.log('Creating FWallet with data:', customerFWalletData);
@@ -916,9 +839,8 @@ export class AuthService {
               last_name: userData.last_name,
               phone: userData.phone,
               address: userData.address || {},
-              created_at: timestamps.created_at,
-              updated_at: timestamps.updated_at,
-              last_login: timestamps.last_login
+              created_at: Math.floor(Date.now() / 1000),
+              updated_at: Math.floor(Date.now() / 1000)
             };
 
             console.log('Creating customer with data:', customerData);
@@ -961,7 +883,7 @@ export class AuthService {
               password: newUserData.password,
               first_name: userData.first_name,
               last_name: userData.last_name,
-              balance: isGenerated === 'true' ? 999999 : 0
+              balance: 0
             };
 
             console.log('Creating FWallet with data:', driverFWalletData);
@@ -994,10 +916,7 @@ export class AuthService {
               rating: {
                 average_rating: 0,
                 review_count: 0
-              },
-              created_at: timestamps.created_at,
-              updated_at: timestamps.updated_at,
-              last_login: timestamps.last_login
+              }
             };
 
             console.log('Creating driver with data:', driverData);
@@ -1051,7 +970,7 @@ export class AuthService {
               password: newUserData.password,
               first_name: userData.first_name,
               last_name: userData.last_name,
-              balance: isGenerated === 'true' ? 999999 : 0
+              balance: 0
             };
 
             console.log('Creating FWallet with data:', fWalletData);
@@ -1138,7 +1057,7 @@ export class AuthService {
             ...userData,
             password: newUserData.password,
             user_id: newUser.id,
-            balance: isGenerated === 'true' ? 999999 : 0
+            balance: 0
           });
           break;
 
@@ -1156,9 +1075,9 @@ export class AuthService {
             assigned_tickets: [],
             available_for_work: false,
             is_assigned: false,
-            created_at: timestamps.created_at,
-            updated_at: timestamps.updated_at,
-            last_login: timestamps.last_login
+            created_at: Math.floor(Date.now() / 1000),
+            updated_at: Math.floor(Date.now() / 1000),
+            last_login: Math.floor(Date.now() / 1000)
           });
           break;
 
@@ -1176,10 +1095,10 @@ export class AuthService {
             role,
             first_name: userData.first_name,
             last_name: userData.last_name,
-            permissions: RolePermissions[role],
+            permissions: [],
             status: AdminStatus.ACTIVE,
-            created_at: timestamps.created_at,
-            updated_at: timestamps.updated_at
+            created_at: Math.floor(Date.now() / 1000),
+            updated_at: Math.floor(Date.now() / 1000)
           });
           if (newUserWithRole.EC !== 'OK') {
             return newUserWithRole;
@@ -1290,33 +1209,5 @@ export class AuthService {
     });
 
     return createResponse('OK', null, 'Password reset successfully');
-  }
-
-  private generateRandomTimestamps(isGenerated?: string): {
-    created_at: number;
-    updated_at: number;
-    last_login: number;
-  } {
-    if (isGenerated === 'true') {
-      // Generate random timestamp within last 2 months (60 days)
-      const now = Math.floor(Date.now() / 1000);
-      const twoMonthsAgo = now - 60 * 24 * 60 * 60; // 60 days in seconds
-      const randomTimestamp =
-        Math.floor(Math.random() * (now - twoMonthsAgo)) + twoMonthsAgo;
-
-      return {
-        created_at: randomTimestamp,
-        updated_at: randomTimestamp,
-        last_login: randomTimestamp
-      };
-    } else {
-      // Use current timestamp
-      const currentTimestamp = Math.floor(Date.now() / 1000);
-      return {
-        created_at: currentTimestamp,
-        updated_at: currentTimestamp,
-        last_login: currentTimestamp
-      };
-    }
   }
 }

@@ -10,6 +10,7 @@ import { OrdersRepository } from 'src/orders/orders.repository';
 import { Promotion } from 'src/promotions/entities/promotion.entity';
 import { RedisService } from 'src/redis/redis.service';
 import { CustomerCaresController } from './customer_cares.controller';
+import { CustomerCaresControllerFake } from './customer_cares.controller.fake';
 import { CustomerCaresGateway } from './customer_cares.gateway';
 
 @Module({
@@ -21,7 +22,7 @@ import { CustomerCaresGateway } from './customer_cares.gateway';
       Promotion
     ])
   ],
-  controllers: [CustomerCaresController],
+  controllers: [CustomerCaresController, CustomerCaresControllerFake],
   providers: [
     RedisService,
     CustomerCareService,

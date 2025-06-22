@@ -3,6 +3,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RestaurantsService } from './restaurants.service';
 import { RestaurantsController } from './restaurants.controller';
+import { RestaurantsControllerFake } from './restaurants.controller.fake';
 import { Restaurant } from './entities/restaurant.entity';
 import { RestaurantsRepository } from './restaurants.repository';
 import { DriversModule } from 'src/drivers/drivers.module';
@@ -50,9 +51,6 @@ import { RedisService } from 'src/redis/redis.service';
 import { OrdersService } from 'src/orders/orders.service';
 import { DriversGateway } from 'src/drivers/drivers.gateway';
 import { DriverProgressStagesService } from 'src/driver_progress_stages/driver_progress_stages.service';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { Notification } from 'src/notifications/entities/notification.entity';
-import { NotificationsRepository } from 'src/notifications/notifications.repository';
 
 @Module({
   imports: [
@@ -70,8 +68,7 @@ import { NotificationsRepository } from 'src/notifications/notifications.reposit
       Admin,
       DriverProgressStage,
       User,
-      DriverStatsRecord,
-      Notification
+      DriverStatsRecord
     ]),
     UsersModule,
     AddressBookModule,
@@ -84,13 +81,12 @@ import { NotificationsRepository } from 'src/notifications/notifications.reposit
     FoodCategoriesModule,
     EventEmitterModule.forRoot()
   ],
-  controllers: [RestaurantsController],
+  controllers: [RestaurantsController, RestaurantsControllerFake],
   providers: [
     RestaurantsService,
     RestaurantsRepository,
     RatingsReviewsRepository,
     AddressBookRepository,
-    NotificationsRepository,
     FoodCategoriesRepository,
     UserRepository,
     FinanceRulesService,
@@ -99,7 +95,6 @@ import { NotificationsRepository } from 'src/notifications/notifications.reposit
     DriverStatsService,
     FinanceRulesRepository,
     AdminRepository,
-    NotificationsService,
     OrdersRepository,
     JwtService,
     RestaurantsGateway,

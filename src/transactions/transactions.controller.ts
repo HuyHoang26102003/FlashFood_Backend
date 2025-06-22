@@ -21,11 +21,12 @@ export class TransactionsController {
     return this.transactionsService.create(createTransactionDto);
   }
 
+  // return array
   @Get()
   findAll() {
     return this.transactionsService.findAll();
   }
-
+  // return object
   @Get('paginated')
   findAllPaginated(
     @Query('page') page: string = '1',
