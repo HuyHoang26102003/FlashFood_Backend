@@ -16,7 +16,7 @@ export class UpdateOrderDto extends PartialType(CreateOrderDto) {
     'EN_ROUTE',
     'OUT_FOR_DELIVERY',
     'DELIVERED',
-    'DELIVERY_FAILED',
+    'DELIVERY_FAILED'
   ])
   status:
     | 'PENDING'
@@ -95,6 +95,16 @@ export class UpdateOrderDto extends PartialType(CreateOrderDto) {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  sub_total?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_amount?: number;
+
+  @IsOptional()
+  @IsNumber()
   delivery_time?: number;
 
   @IsOptional()
@@ -108,7 +118,7 @@ export class UpdateOrderDto extends PartialType(CreateOrderDto) {
     'EN_ROUTE',
     'OUT_FOR_DELIVERY',
     'DELIVERY_FAILED',
-    'DELIVERED',
+    'DELIVERED'
   ])
   tracking_info:
     | 'ORDER_PLACED'

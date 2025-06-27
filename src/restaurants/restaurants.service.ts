@@ -940,8 +940,30 @@ export class RestaurantsService {
   }
 
   async findOne(id: string): Promise<ApiResponse<any>> {
+    const start = Date.now();
+    const cacheKey = `restaurant:details:${id}`;
+    const cacheTtl = 1800; // 30 minutes
+
     try {
+      // Try to get from cache first
+      const cacheStart = Date.now();
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        logger.log(
+          `Cache hit for restaurant details ${id} in ${Date.now() - cacheStart}ms`
+        );
+        logger.log(`Total time (cache): ${Date.now() - start}ms`);
+        return createResponse(
+          'OK',
+          JSON.parse(cachedData),
+          'Restaurant retrieved from cache'
+        );
+      }
+
+      logger.log(`Cache miss for restaurant details: ${id}`);
+
       // Fetch the restaurant with its address
+      const dbStart = Date.now();
       const restaurant = await this.dataSource
         .getRepository(Restaurant)
         .createQueryBuilder('restaurant')
@@ -951,6 +973,7 @@ export class RestaurantsService {
         .leftJoinAndSelect('restaurant.specialize_in', 'specialize_in')
         .where('restaurant.id = :id', { id })
         .getOne();
+      logger.log(`Restaurant DB fetch took ${Date.now() - dbStart}ms`);
       if (!restaurant) {
         return createResponse('NotFound', null, 'Restaurant not found');
       }
@@ -1138,13 +1161,29 @@ export class RestaurantsService {
         }
       };
 
+      // Cache the result
+      const cacheSaveStart = Date.now();
+      try {
+        await redis.setEx(
+          cacheKey,
+          cacheTtl,
+          JSON.stringify(restaurantWithRatings)
+        );
+        logger.log(
+          `Restaurant details cached successfully (${Date.now() - cacheSaveStart}ms)`
+        );
+      } catch (cacheError) {
+        logger.warn('Failed to cache restaurant details:', cacheError);
+      }
+
+      logger.log(`Total processing time: ${Date.now() - start}ms`);
       return createResponse(
         'OK',
         restaurantWithRatings,
         'Restaurant retrieved successfully'
       );
     } catch (error: any) {
-      console.error('Error finding restaurant:', error);
+      logger.error('Error finding restaurant:', error);
       return createResponse('ServerError', null, 'Error retrieving restaurant');
     }
   }
@@ -1533,13 +1572,55 @@ export class RestaurantsService {
   async getRestaurantRatingsReviews(
     restaurantId: string
   ): Promise<ApiResponse<any>> {
+    const start = Date.now();
+    const cacheKey = `restaurant:ratings:${restaurantId}`;
+    const cacheTtl = 900; // 15 minutes
+
     try {
-      const restaurant =
-        await this.restaurantsRepository.findById(restaurantId);
+      // Try to get from cache first
+      const cacheStart = Date.now();
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        logger.log(
+          `Cache hit for restaurant ratings ${restaurantId} in ${Date.now() - cacheStart}ms`
+        );
+        logger.log(`Total time (cache): ${Date.now() - start}ms`);
+        return createResponse(
+          'OK',
+          JSON.parse(cachedData),
+          'Restaurant ratings and reviews retrieved from cache'
+        );
+      }
+
+      logger.log(`Cache miss for restaurant ratings: ${restaurantId}`);
+
+      // Check if restaurant exists with caching
+      const restaurantCacheKey = `restaurant:${restaurantId}`;
+      let restaurant = null;
+      const restaurantCached = await redis.get(restaurantCacheKey);
+      if (restaurantCached) {
+        restaurant = JSON.parse(restaurantCached);
+        logger.log('Restaurant found in cache');
+      } else {
+        const dbStart = Date.now();
+        restaurant = await this.restaurantsRepository.findById(restaurantId);
+        if (restaurant) {
+          await redis.setEx(
+            restaurantCacheKey,
+            3600,
+            JSON.stringify(restaurant)
+          );
+          logger.log(`Restaurant cached: ${restaurantCacheKey}`);
+        }
+        logger.log(`Restaurant DB fetch took ${Date.now() - dbStart}ms`);
+      }
+
       if (!restaurant) {
         return createResponse('NotFound', null, 'Restaurant not found');
       }
 
+      // Fetch ratings and reviews from database
+      const ratingsStart = Date.now();
       const ratingsReviews = await this.ratingsReviewsRepository.findAll({
         where: {
           rr_recipient_restaurant_id: restaurantId,
@@ -1547,8 +1628,10 @@ export class RestaurantsService {
         },
         relations: ['reviewer_customer', 'reviewer_driver', 'order']
       });
+      logger.log(`Ratings fetch took ${Date.now() - ratingsStart}ms`);
 
       // Calculate average ratings
+      const calculationStart = Date.now();
       const totalReviews = ratingsReviews?.filter(
         item => !item?.delivery_review || !item?.delivery_rating
       )?.length;
@@ -1568,8 +1651,8 @@ export class RestaurantsService {
       const response = {
         restaurant_id: restaurantId,
         total_reviews: totalReviews,
-        average_food_rating: averageFoodRating,
-        average_delivery_rating: averageDeliveryRating,
+        average_food_rating: parseFloat(averageFoodRating.toFixed(2)),
+        average_delivery_rating: parseFloat(averageDeliveryRating.toFixed(2)),
         reviews: ratingsReviews
           .map(review => ({
             id: review.id,
@@ -1588,14 +1671,27 @@ export class RestaurantsService {
           }))
           ?.filter(item => !item?.delivery_review || !item?.delivery_rating)
       };
+      logger.log(`Calculation took ${Date.now() - calculationStart}ms`);
 
+      // Cache the result
+      const cacheSaveStart = Date.now();
+      try {
+        await redis.setEx(cacheKey, cacheTtl, JSON.stringify(response));
+        logger.log(
+          `Ratings cached successfully (${Date.now() - cacheSaveStart}ms)`
+        );
+      } catch (cacheError) {
+        logger.warn('Failed to cache ratings:', cacheError);
+      }
+
+      logger.log(`Total processing time: ${Date.now() - start}ms`);
       return createResponse(
         'OK',
         response,
         'Restaurant ratings and reviews retrieved successfully'
       );
     } catch (error: any) {
-      console.error('Error getting restaurant ratings and reviews:', error);
+      logger.error('Error getting restaurant ratings and reviews:', error);
       return createResponse(
         'ServerError',
         null,

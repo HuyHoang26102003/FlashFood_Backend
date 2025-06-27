@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { CreateRatingsReviewDto } from './dto/create-ratings_review.dto';
 import { UpdateRatingsReviewDto } from './dto/update-ratings_review.dto';
 import { RatingsReviewsRepository } from './ratings_reviews.repository';
@@ -9,6 +9,9 @@ import { Order } from 'src/orders/entities/order.entity';
 import { Driver } from 'src/drivers/entities/driver.entity';
 import { Customer } from 'src/customers/entities/customer.entity';
 import { Restaurant } from 'src/restaurants/entities/restaurant.entity';
+import { RedisService } from 'src/redis/redis.service';
+
+const logger = new Logger('RatingsReviewsService');
 
 @Injectable()
 export class RatingsReviewsService {
@@ -21,8 +24,30 @@ export class RatingsReviewsService {
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
     @InjectRepository(Restaurant)
-    private readonly restaurantRepository: Repository<Restaurant>
+    private readonly restaurantRepository: Repository<Restaurant>,
+    private readonly redisService: RedisService
   ) {}
+
+  /**
+   * Cache invalidation helper method
+   */
+  private async invalidateRestaurantRatingsCache(
+    restaurantId: string
+  ): Promise<void> {
+    try {
+      const cacheKeys = [
+        `restaurant:ratings:${restaurantId}`,
+        `restaurant:details:${restaurantId}`
+      ];
+      await Promise.all(cacheKeys.map(key => this.redisService.del(key)));
+      logger.log(`Invalidated ratings cache for restaurant: ${restaurantId}`);
+    } catch (error) {
+      logger.warn(
+        `Failed to invalidate ratings cache for restaurant ${restaurantId}:`,
+        error
+      );
+    }
+  }
 
   async create(createRatingsReviewDto: CreateRatingsReviewDto) {
     try {
@@ -96,6 +121,17 @@ export class RatingsReviewsService {
       const newReview = await this.ratingsReviewsRepository.create(
         createRatingsReviewDto
       );
+
+      // Invalidate restaurant ratings cache if this is a restaurant review
+      if (
+        createRatingsReviewDto.recipient_type === 'restaurant' &&
+        createRatingsReviewDto.rr_recipient_restaurant_id
+      ) {
+        await this.invalidateRestaurantRatingsCache(
+          createRatingsReviewDto.rr_recipient_restaurant_id
+        );
+      }
+
       return createResponse('OK', newReview, 'Review created successfully');
     } catch (error: any) {
       console.error('Error creating review:', error);
@@ -232,6 +268,19 @@ export class RatingsReviewsService {
         id,
         updateRatingsReviewDto
       );
+
+      // Invalidate restaurant ratings cache if this affects a restaurant
+      const recipientRestaurantId =
+        updateRatingsReviewDto.rr_recipient_restaurant_id ||
+        existingReview.rr_recipient_restaurant_id;
+      if (
+        (updateRatingsReviewDto.recipient_type === 'restaurant' ||
+          existingReview.recipient_type === 'restaurant') &&
+        recipientRestaurantId
+      ) {
+        await this.invalidateRestaurantRatingsCache(recipientRestaurantId);
+      }
+
       return createResponse('OK', updatedReview, 'Review updated successfully');
     } catch (error: any) {
       console.error('Error updating review:', error);

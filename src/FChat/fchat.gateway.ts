@@ -18,8 +18,8 @@ import { Enum_UserType } from 'src/types/Payload';
 import { RoomType } from './entities/chat-room.entity';
 import { MessageType } from './entities/message.entity';
 import { RedisService } from 'src/redis/redis.service';
-import { ChatbotService, ChatbotResponse } from './chatbot.service';
-import { SupportChatService, SupportSession } from './support-chat.service';
+import { ChatbotService } from './chatbot.service';
+import { SupportChatService } from './support-chat.service';
 
 @WebSocketGateway({
   namespace: 'chat',
@@ -67,17 +67,10 @@ export class FchatGateway
   private async validateToken(client: Socket): Promise<any> {
     try {
       let authHeader = client.handshake.headers.auth as string;
-      console.log(
-        'check anything heẻể?? ',
-        client.handshake.auth,
-        client.handshake.headers,
-        client.handshake
-      );
       if (!authHeader && client.handshake.auth && client.handshake.auth) {
         authHeader = client.handshake.auth.token;
       }
 
-      console.log('check auth', authHeader);
       if (!authHeader?.startsWith('Bearer ')) {
         client.disconnect();
         return null;
@@ -471,6 +464,7 @@ export class FchatGateway
       if (!user) {
         throw new WsException('Unauthorized');
       }
+      console.log('check wahgt data', data, data.roomId);
 
       const cacheKey = `chat_history:${data.roomId}`;
       const ttl = 3600; // Cache 1 giờ
@@ -770,8 +764,8 @@ export class FchatGateway
     if (chatType === 'ORDER') {
       const validOrderCombinations = {
         CUSTOMER: ['DRIVER', 'RESTAURANT_OWNER'],
-        DRIVER: ['CUSTOMER'],
-        RESTAURANT_OWNER: ['CUSTOMER'],
+        DRIVER: ['CUSTOMER', 'RESTAURANT_OWNER'],
+        RESTAURANT_OWNER: ['CUSTOMER', 'DRIVER'],
         ADMIN: ['CUSTOMER', 'DRIVER', 'RESTAURANT_OWNER']
       };
       return validOrderCombinations[userType]?.includes(recipientType) || false;
@@ -1020,10 +1014,12 @@ export class FchatGateway
       console.log('✅ User validated:', userData.id, userData.logged_in_as);
 
       // Check if user already has an active support session
-      const existingSession = this.supportChatService.getUserActiveSession(
-        userData.id
-      );
+      console.log('🔍 Checking for existing session in Redis...');
+      const existingSession =
+        await this.supportChatService.getUserActiveSession(userData.id);
+
       if (existingSession) {
+        console.log('✅ Found existing session:', existingSession.sessionId);
         client.emit('supportChatStarted', {
           sessionId: existingSession.sessionId,
           chatMode: existingSession.chatMode,
@@ -1045,6 +1041,7 @@ export class FchatGateway
         return existingSession;
       }
 
+      console.log('🆕 No existing session found, creating new one...');
       // Create new support session with enhanced parameters
       const session = await this.supportChatService.startSupportSession(
         userData.id,
@@ -1163,9 +1160,11 @@ export class FchatGateway
       }
 
       // Check if user already has an active support session
-      const existingSession = this.supportChatService.getUserActiveSession(
-        userData.id || userData.userId
-      );
+      const existingSession =
+        await this.supportChatService.getUserActiveSession(
+          userData.id || userData.userId
+        );
+
       if (existingSession) {
         client.emit('supportChatStarted', {
           sessionId: existingSession.sessionId,
@@ -1242,10 +1241,23 @@ export class FchatGateway
         throw new WsException('Unauthorized');
       }
 
-      const session = this.supportChatService.getSession(data.sessionId);
-      if (!session || session.userId !== userData.id) {
+      console.log(`📡 Fetching session from Redis: ${data.sessionId}`);
+      const session = await this.supportChatService.getSession(data.sessionId);
+      if (!session) {
+        console.log(`❌ Session not found: ${data.sessionId}`);
         throw new WsException('Invalid session');
       }
+
+      if (session.userId !== userData.id) {
+        console.log(
+          `⚠️ Session user mismatch: ${session.userId} vs ${userData.id}`
+        );
+        throw new WsException('Unauthorized for this session');
+      }
+
+      console.log(
+        `✅ Session validated: ${data.sessionId}, mode: ${session.chatMode}`
+      );
 
       // Emit user message to room
       this.server.to(`support_${data.sessionId}`).emit('userMessage', {
@@ -1267,6 +1279,19 @@ export class FchatGateway
           userData.logged_in_as
         );
         console.log('🤖 Chatbot response:', response);
+
+        // Debug log for restaurant owner menu options
+        if (userData.logged_in_as === Enum_UserType.RESTAURANT_OWNER) {
+          console.log('🔍 Restaurant owner menu options debug:');
+          console.log('  - User message:', data.message);
+          console.log('  - Response type:', response.type);
+          if (response.options) {
+            console.log(
+              '  - Response options:',
+              JSON.stringify(response.options)
+            );
+          }
+        }
 
         if (response.type === 'transfer' || response.requiresHuman) {
           // User wants to connect to human or bot determined escalation is needed
@@ -1374,9 +1399,20 @@ export class FchatGateway
         throw new WsException('Unauthorized');
       }
 
-      const session = this.supportChatService.getSession(data.sessionId);
-      if (!session || session.userId !== userData.id) {
+      console.log(
+        `📡 Fetching session for human agent request: ${data.sessionId}`
+      );
+      const session = await this.supportChatService.getSession(data.sessionId);
+      if (!session) {
+        console.log(`❌ Session not found: ${data.sessionId}`);
         throw new WsException('Invalid session');
+      }
+
+      if (session.userId !== userData.id) {
+        console.log(
+          `⚠️ Session user mismatch: ${session.userId} vs ${userData.id}`
+        );
+        throw new WsException('Unauthorized for this session');
       }
 
       const result = await this.supportChatService.requestHumanAgent(
@@ -1499,7 +1535,7 @@ export class FchatGateway
         throw new WsException('Unauthorized');
       }
 
-      await this.supportChatService.agentUnavailable(userData.id, data?.reason);
+      await this.supportChatService.agentUnavailable(userData.id);
 
       client.emit('agentStatusChanged', {
         status: 'unavailable',
@@ -1615,7 +1651,7 @@ export class FchatGateway
         throw new WsException('Unauthorized');
       }
 
-      const session = this.supportChatService.getSession(data.sessionId);
+      const session = await this.supportChatService.getSession(data.sessionId);
       if (!session) {
         throw new WsException('Session not found');
       }
@@ -1770,7 +1806,7 @@ export class FchatGateway
     const agentSocket = this.userSockets.get(data.agentId);
     if (agentSocket) {
       // Get customer information for agent
-      const session = this.supportChatService.getSession(data.sessionId);
+      const session = await this.supportChatService.getSession(data.sessionId);
       agentSocket.emit('newCustomerAssigned', {
         sessionId: data.sessionId,
         customerId: data.userId,
@@ -1968,7 +2004,7 @@ export class FchatGateway
         throw new WsException('Unauthorized - Agent access required');
       }
 
-      const session = this.supportChatService.getSession(data.sessionId);
+      const session = await this.supportChatService.getSession(data.sessionId);
       if (!session || session.agentId !== userData.id) {
         throw new WsException('Invalid session or unauthorized');
       }
@@ -2019,7 +2055,7 @@ export class FchatGateway
         throw new WsException('Unauthorized');
       }
 
-      const session = this.supportChatService.getSession(data.sessionId);
+      const session = await this.supportChatService.getSession(data.sessionId);
       if (!session || session.userId !== userData.id) {
         throw new WsException('Invalid session');
       }

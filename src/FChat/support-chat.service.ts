@@ -234,8 +234,12 @@ export class SupportChatService {
     position?: number;
     estimatedWaitTime?: number;
   }> {
-    const session = this.activeSessions.get(sessionId);
-    if (!session) return { success: false };
+    console.log(`📡 Fetching session for human agent request: ${sessionId}`);
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      console.log(`❌ Session not found for human agent request: ${sessionId}`);
+      return { success: false };
+    }
 
     // Update session category if provided
     if (category) {
@@ -255,6 +259,7 @@ export class SupportChatService {
     );
 
     if (availableAgent) {
+      console.log(`✅ Found available agent: ${availableAgent.id}`);
       // Assign agent immediately
       const success = await this.assignAgentToSession(
         session,
@@ -270,6 +275,7 @@ export class SupportChatService {
       }
     }
 
+    console.log(`⏳ No available agent, adding to queue: ${sessionId}`);
     // Add to queue with enhanced queueing
     const queueItem: QueueItem = {
       sessionId,
@@ -360,7 +366,7 @@ export class SupportChatService {
     await this.processQueueForAgent(agentId);
   }
 
-  async agentUnavailable(agentId: string, reason?: string): Promise<void> {
+  async agentUnavailable(agentId: string): Promise<void> {
     const agent = this.agents.get(agentId);
     if (!agent) return;
 
@@ -389,8 +395,12 @@ export class SupportChatService {
     reason?: string,
     transferType: 'manual' | 'automatic' | 'escalation' = 'manual'
   ): Promise<boolean> {
-    const session = this.activeSessions.get(sessionId);
-    if (!session) return false;
+    console.log(`📡 Fetching session for transfer: ${sessionId}`);
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      console.log(`❌ Session not found for transfer: ${sessionId}`);
+      return false;
+    }
 
     const fromAgentId = session.agentId;
 
@@ -467,8 +477,12 @@ export class SupportChatService {
     reason: string,
     targetTier?: 'tier2' | 'tier3' | 'supervisor'
   ): Promise<boolean> {
-    const session = this.activeSessions.get(sessionId);
-    if (!session) return false;
+    console.log(`📡 Fetching session for escalation: ${sessionId}`);
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      console.log(`❌ Session not found for escalation: ${sessionId}`);
+      return false;
+    }
 
     session.status = 'escalated';
     session.escalationReason = reason;
@@ -504,6 +518,14 @@ export class SupportChatService {
       queueItem.escalationLevel++;
       this.sortQueue();
     }
+
+    // Update session in Redis
+    this.activeSessions.set(sessionId, session);
+    await this.redisService.set(
+      `support_session:${sessionId}`,
+      JSON.stringify(session),
+      86400 * 1000
+    );
 
     // Emit escalation event
     this.eventEmitter.emit('sessionEscalated', {
@@ -870,7 +892,7 @@ export class SupportChatService {
   }
 
   private updateQueueEstimates(): void {
-    this.supportQueue.forEach((item, index) => {
+    this.supportQueue.forEach(item => {
       item.estimatedWaitTime = this.calculateEstimatedWaitTime(item);
     });
   }
@@ -936,17 +958,146 @@ export class SupportChatService {
   }
 
   // Existing methods (enhanced)
-  getSession(sessionId: string): SupportSession | undefined {
-    return this.activeSessions.get(sessionId);
-  }
+  async getSession(sessionId: string): Promise<SupportSession | undefined> {
+    console.log(`🔍 Getting session ${sessionId}`);
 
-  getUserActiveSession(userId: string): SupportSession | undefined {
-    for (const session of this.activeSessions.values()) {
-      if (session.userId === userId && session.status !== 'ended') {
+    try {
+      // Always check Redis first
+      console.log(
+        `📡 Fetching session from Redis: support_session:${sessionId}`
+      );
+      const sessionData = await this.redisService.get(
+        `support_session:${sessionId}`
+      );
+
+      if (sessionData) {
+        const session = JSON.parse(sessionData);
+        console.log(`✅ Found session in Redis: ${sessionId}`);
+
+        // Convert string dates to Date objects
+        if (session.startTime && typeof session.startTime === 'string') {
+          session.startTime = new Date(session.startTime);
+        }
+
+        if (session.endTime && typeof session.endTime === 'string') {
+          session.endTime = new Date(session.endTime);
+        }
+
+        if (session.slaDeadline && typeof session.slaDeadline === 'string') {
+          session.slaDeadline = new Date(session.slaDeadline);
+        }
+
+        // Convert dates in transfer history
+        if (session.transferHistory && Array.isArray(session.transferHistory)) {
+          session.transferHistory = session.transferHistory.map(transfer => ({
+            ...transfer,
+            timestamp:
+              typeof transfer.timestamp === 'string'
+                ? new Date(transfer.timestamp)
+                : transfer.timestamp
+          }));
+        }
+
+        // Update in-memory cache
+        this.activeSessions.set(sessionId, session);
+
         return session;
       }
+
+      console.log(`❌ Session not found in Redis: ${sessionId}`);
+      return undefined;
+    } catch (error) {
+      console.error(`Error fetching session ${sessionId} from Redis:`, error);
+
+      // Fallback to memory only if Redis fails
+      console.log('⚠️ Falling back to in-memory session check');
+      const memorySession = this.activeSessions.get(sessionId);
+      if (memorySession) {
+        console.log(`⚠️ Found session in memory only: ${sessionId}`);
+      }
+
+      return memorySession;
     }
-    return undefined;
+  }
+
+  async getUserActiveSession(
+    userId: string
+  ): Promise<SupportSession | undefined> {
+    console.log(`🔍 Checking active session for user ${userId}`);
+
+    try {
+      // Always check Redis first
+      console.log('📡 Fetching from Redis Upstash...');
+      const client = this.redisService.getClient();
+      const sessionKeys = await client.keys(`support_session:*`);
+      console.log(`📊 Found ${sessionKeys.length} total sessions in Redis`);
+
+      // Look for sessions belonging to this user
+      for (const key of sessionKeys) {
+        const sessionData = await this.redisService.get(key);
+        if (sessionData) {
+          const session = JSON.parse(sessionData);
+          if (session.userId === userId && session.status !== 'ended') {
+            console.log(
+              `✅ Found active session in Redis: ${session.sessionId}`
+            );
+
+            // Convert string dates to Date objects
+            if (session.startTime && typeof session.startTime === 'string') {
+              session.startTime = new Date(session.startTime);
+            }
+
+            if (session.endTime && typeof session.endTime === 'string') {
+              session.endTime = new Date(session.endTime);
+            }
+
+            if (
+              session.slaDeadline &&
+              typeof session.slaDeadline === 'string'
+            ) {
+              session.slaDeadline = new Date(session.slaDeadline);
+            }
+
+            // Convert dates in transfer history
+            if (
+              session.transferHistory &&
+              Array.isArray(session.transferHistory)
+            ) {
+              session.transferHistory = session.transferHistory.map(
+                transfer => ({
+                  ...transfer,
+                  timestamp:
+                    typeof transfer.timestamp === 'string'
+                      ? new Date(transfer.timestamp)
+                      : transfer.timestamp
+                })
+              );
+            }
+
+            // Update in-memory cache
+            this.activeSessions.set(session.sessionId, session);
+
+            return session;
+          }
+        }
+      }
+
+      console.log(`❌ No active session found in Redis for user ${userId}`);
+      return undefined;
+    } catch (error) {
+      console.error('Error fetching session from Redis:', error);
+
+      // Fallback to memory only if Redis fails
+      console.log('⚠️ Falling back to in-memory session check');
+      for (const session of this.activeSessions.values()) {
+        if (session.userId === userId && session.status !== 'ended') {
+          console.log(`⚠️ Found session in memory only: ${session.sessionId}`);
+          return session;
+        }
+      }
+
+      return undefined;
+    }
   }
 
   async switchChatMode(
@@ -1025,7 +1176,35 @@ export class SupportChatService {
       for (const key of sessionKeys) {
         const sessionData = await this.redisService.get(key);
         if (sessionData) {
-          const session: SupportSession = JSON.parse(sessionData);
+          const session = JSON.parse(sessionData);
+
+          // Convert string dates to Date objects
+          if (session.startTime && typeof session.startTime === 'string') {
+            session.startTime = new Date(session.startTime);
+          }
+
+          if (session.endTime && typeof session.endTime === 'string') {
+            session.endTime = new Date(session.endTime);
+          }
+
+          if (session.slaDeadline && typeof session.slaDeadline === 'string') {
+            session.slaDeadline = new Date(session.slaDeadline);
+          }
+
+          // Convert dates in transfer history
+          if (
+            session.transferHistory &&
+            Array.isArray(session.transferHistory)
+          ) {
+            session.transferHistory = session.transferHistory.map(transfer => ({
+              ...transfer,
+              timestamp:
+                typeof transfer.timestamp === 'string'
+                  ? new Date(transfer.timestamp)
+                  : transfer.timestamp
+            }));
+          }
+
           this.activeSessions.set(session.sessionId, session);
         }
       }
@@ -1035,7 +1214,13 @@ export class SupportChatService {
       for (const key of agentKeys) {
         const agentData = await this.redisService.get(key);
         if (agentData) {
-          const agent: Agent = JSON.parse(agentData);
+          const agent = JSON.parse(agentData);
+
+          // Convert string dates to Date objects
+          if (agent.lastActivity && typeof agent.lastActivity === 'string') {
+            agent.lastActivity = new Date(agent.lastActivity);
+          }
+
           this.agents.set(agent.id, agent);
         }
       }
