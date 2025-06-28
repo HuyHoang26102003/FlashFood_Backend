@@ -981,6 +981,8 @@ export class OrdersService {
         order_items: populatedOrderItems,
         total_amount: savedOrder.total_amount,
         total_restaurant_earn: restaurantSubTotal,
+        sub_total: savedOrder.sub_total,
+        discount_amount: savedOrder.discount_amount,
         delivery_fee: savedOrder.delivery_fee,
         service_fee: savedOrder.service_fee,
         promotions_applied: savedOrder.promotions_applied,

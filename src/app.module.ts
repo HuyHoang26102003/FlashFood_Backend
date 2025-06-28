@@ -76,6 +76,7 @@ import { AdminChartModule } from './admin_chart/admin_chart.module';
 import { NotificationsService } from './notifications/notifications.service';
 import { NotificationsRepository } from './notifications/notifications.repository';
 import { Notification } from './notifications/entities/notification.entity';
+import { LocationModule } from './realtime-location';
 
 @Global()
 @Module({
@@ -129,6 +130,7 @@ import { Notification } from './notifications/entities/notification.entity';
     AdminModule,
     CustomerCaresModule,
     FinanceAdminModule,
+    LocationModule,
     DriverProgressStagesModule,
     CustomerCareInquiriesModule,
     CompanionAdminModule,

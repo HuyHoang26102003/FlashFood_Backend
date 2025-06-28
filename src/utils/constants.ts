@@ -51,6 +51,7 @@ export const ResponseStatus = {
 };
 
 export const FIXED_DELIVERY_DRIVER_WAGE = 20;
+export const AVERAGE_SPEED_KM_H = 40;
 
 export const FLASHFOOD_FINANCE = {
   id: 'F_WALLET_32bd844d-4558-4f5b-8906-4e74d733cd91',

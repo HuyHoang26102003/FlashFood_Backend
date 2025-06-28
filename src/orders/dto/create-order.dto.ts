@@ -60,6 +60,16 @@ export class CreateOrderDto {
   @Min(0)
   service_fee: number;
 
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  sub_total?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount_amount?: number;
+
   @IsEnum(['PENDING', 'PAID', 'FAILED'])
   payment_status: 'PENDING' | 'PAID' | 'FAILED';
 

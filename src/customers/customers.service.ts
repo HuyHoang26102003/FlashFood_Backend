@@ -19,6 +19,7 @@ import { DataSource, ILike, In } from 'typeorm';
 import { Order } from 'src/orders/entities/order.entity';
 import { NotificationsRepository } from 'src/notifications/notifications.repository';
 import { RatingsReview } from 'src/ratings_reviews/entities/ratings_review.entity';
+import { MenuItemVariant } from 'src/menu_item_variants/entities/menu_item_variant.entity';
 export interface AddressPopulate {
   id?: string;
   street?: string;
@@ -73,6 +74,49 @@ export class CustomersService {
       );
     } catch (error: any) {
       logger.error('Error preloading restaurants into Redis:', error);
+    }
+  }
+
+  /**
+   * Cache invalidation helper methods
+   */
+  async invalidateCustomerFavoritesCache(customerId: string): Promise<void> {
+    try {
+      const cacheKey = `customer:favorites:${customerId}`;
+      await this.redisService.del(cacheKey);
+      logger.log(`Invalidated favorites cache for customer: ${customerId}`);
+    } catch (error) {
+      logger.warn(
+        `Failed to invalidate favorites cache for customer ${customerId}:`,
+        error
+      );
+    }
+  }
+
+  async invalidateCustomerNotificationsCache(
+    customerId: string
+  ): Promise<void> {
+    try {
+      const cacheKey = `customer:notifications:${customerId}`;
+      await this.redisService.del(cacheKey);
+      logger.log(`Invalidated notifications cache for customer: ${customerId}`);
+    } catch (error) {
+      logger.warn(
+        `Failed to invalidate notifications cache for customer ${customerId}:`,
+        error
+      );
+    }
+  }
+
+  async invalidateAllCustomerNotificationsCache(): Promise<void> {
+    try {
+      await this.redisService.deleteByPattern('customer:notifications:*');
+      logger.log('Invalidated all customer notifications cache');
+    } catch (error) {
+      logger.warn(
+        'Failed to invalidate all customer notifications cache:',
+        error
+      );
     }
   }
 
@@ -533,6 +577,9 @@ export class CustomersService {
       };
       await redis.setEx(cacheKey, 7200, JSON.stringify(updatedCustomer));
 
+      // Invalidate favorites cache since the list has changed
+      await this.invalidateCustomerFavoritesCache(id);
+
       logger.log(`Toggle favorite restaurant took ${Date.now() - start}ms`);
       return createResponse(
         'OK',
@@ -618,8 +665,31 @@ export class CustomersService {
   async getFavoriteRestaurants(
     customerId: string
   ): Promise<ApiResponse<Restaurant[]>> {
+    const start = Date.now();
+    const cacheKey = `customer:favorites:${customerId}`;
+    const cacheTtl = 1800; // 30 minutes
+
     try {
+      // Try to get from cache first
+      const cacheStart = Date.now();
+      const cachedData = await this.redisService.get(cacheKey);
+      if (cachedData) {
+        logger.log(
+          `Cache hit for customer favorites ${customerId} in ${Date.now() - cacheStart}ms`
+        );
+        logger.log(`Total time (cache): ${Date.now() - start}ms`);
+        const cachedFavorites = JSON.parse(cachedData);
+        return createResponse(
+          'OK',
+          cachedFavorites,
+          `Fetched ${cachedFavorites.length} favorite restaurants from cache successfully`
+        );
+      }
+
+      logger.log(`Cache miss for customer favorites: ${customerId}`);
+
       // Lấy thông tin customer dựa trên customerId
+      const customerStart = Date.now();
       const customer =
         await this.customerRepository.findByIdWithFavoriterRestaurants(
           customerId
@@ -627,7 +697,7 @@ export class CustomersService {
       if (!customer) {
         return createResponse('NotFound', null, 'Customer not found');
       }
-      console.log('cehck what happen', customer.favorite_restaurants, customer);
+      logger.log(`Customer fetch took ${Date.now() - customerStart}ms`);
 
       // Lấy danh sách favorite_restaurants từ customer
       const favoriteRestaurantIds = customer.favorite_restaurants.map(
@@ -635,6 +705,8 @@ export class CustomersService {
       );
 
       if (!favoriteRestaurantIds || favoriteRestaurantIds.length === 0) {
+        // Cache empty result to prevent unnecessary DB queries
+        await this.redisService.set(cacheKey, JSON.stringify([]), 300 * 1000); // 5 minutes for empty results
         return createResponse(
           'OK',
           [],
@@ -643,6 +715,7 @@ export class CustomersService {
       }
 
       // Lấy chi tiết các nhà hàng từ repository với relations để populate đầy đủ
+      const restaurantsStart = Date.now();
       const favoriteRestaurants =
         await this.restaurantRepository.repository.find({
           where: { id: In(favoriteRestaurantIds) },
@@ -661,7 +734,24 @@ export class CustomersService {
             }
           }
         });
+      logger.log(`Restaurants fetch took ${Date.now() - restaurantsStart}ms`);
 
+      // Cache the result
+      const cacheSaveStart = Date.now();
+      try {
+        await this.redisService.set(
+          cacheKey,
+          JSON.stringify(favoriteRestaurants),
+          cacheTtl * 1000
+        );
+        logger.log(
+          `Favorites cached successfully (${Date.now() - cacheSaveStart}ms)`
+        );
+      } catch (cacheError) {
+        logger.warn('Failed to cache favorite restaurants:', cacheError);
+      }
+
+      logger.log(`Total processing time: ${Date.now() - start}ms`);
       // Trả về danh sách nhà hàng yêu thích đã được populate
       return createResponse(
         'OK',
@@ -669,7 +759,7 @@ export class CustomersService {
         `Fetched ${favoriteRestaurants.length} favorite restaurants successfully`
       );
     } catch (error: any) {
-      console.error('Error fetching favorite restaurants:', error);
+      logger.error('Error fetching favorite restaurants:', error);
       return createResponse(
         'ServerError',
         null,
@@ -913,6 +1003,9 @@ export class CustomersService {
           cancellation_title: true,
           cancellation_description: true,
           cancelled_at: true,
+          service_fee: true,
+          sub_total: true,
+          discount_amount: true,
           restaurant: {
             id: true,
             restaurant_name: true,
@@ -977,13 +1070,55 @@ export class CustomersService {
       const menuItemMap = new Map(menuItems.map(item => [item.id, item]));
       logger.log(`MenuItems fetch took ${Date.now() - menuItemsStart}ms`);
 
+      // 5.1 Batch query MenuItemVariants
+      const variantsStart = Date.now();
+      const allVariantIds = orders.flatMap(order =>
+        order.order_items
+          .filter(item => item.variant_id)
+          .map(item => item.variant_id)
+      );
+
+      // Only query if there are variant IDs
+      let menuItemVariantMap = new Map();
+      if (allVariantIds.length > 0) {
+        const menuItemVariants = await this.dataSource
+          .getRepository(MenuItemVariant)
+          .find({
+            where: { id: In(allVariantIds) },
+            select: {
+              id: true,
+              menu_id: true,
+              variant: true,
+              description: true,
+              avatar: { url: true, key: true },
+              price: true,
+              discount_rate: true
+            }
+          });
+        menuItemVariantMap = new Map(
+          menuItemVariants.map(variant => [variant.id, variant])
+        );
+      }
+      logger.log(`MenuItemVariants fetch took ${Date.now() - variantsStart}ms`);
+
       // 6. Populate orders
       const processingStart = Date.now();
       const populatedOrders = orders.map(order => {
-        const populatedOrderItems = order.order_items.map(item => ({
-          ...item,
-          menu_item: menuItemMap.get(item.item_id) || null
-        }));
+        const populatedOrderItems = order.order_items.map(item => {
+          // Get the menu item
+          const menuItem = menuItemMap.get(item.item_id) || null;
+
+          // Get the menu item variant if it exists
+          const menuItemVariant = item.variant_id
+            ? menuItemVariantMap.get(item.variant_id) || null
+            : null;
+
+          return {
+            ...item,
+            menu_item: menuItem,
+            menu_item_variant: menuItemVariant
+          };
+        });
 
         const restaurantSpecializations =
           specializationMap.get(order.restaurant_id) || [];
@@ -1067,30 +1202,58 @@ export class CustomersService {
   }
 
   async getNotifications(customerId: string): Promise<ApiResponse<any>> {
+    const start = Date.now();
+    const cacheKey = `customer:notifications:${customerId}`;
+    const cacheTtl = 300; // 5 minutes (notifications change frequently)
+
     try {
+      // Try to get from cache first
+      const cacheStart = Date.now();
+      const cachedData = await this.redisService.get(cacheKey);
+      if (cachedData) {
+        logger.log(
+          `Cache hit for customer notifications ${customerId} in ${Date.now() - cacheStart}ms`
+        );
+        logger.log(`Total time (cache): ${Date.now() - start}ms`);
+        const cachedNotifications = JSON.parse(cachedData);
+        return createResponse(
+          'OK',
+          cachedNotifications,
+          `Fetched ${cachedNotifications.length} notifications from cache for customer ${customerId}`
+        );
+      }
+
+      logger.log(`Cache miss for customer notifications: ${customerId}`);
+
       // Kiểm tra customer có tồn tại không
+      const customerStart = Date.now();
       const customer = await this.customerRepository.findById(customerId);
       if (!customer) {
         return createResponse('NotFound', null, 'Customer not found');
       }
+      logger.log(`Customer validation took ${Date.now() - customerStart}ms`);
 
-      // Lấy thông báo chỉ định riêng cho customer (target_user_id = customerId)
-      const specificNotifications =
-        await this.notificationsRepository.findSpecificNotifications(
-          customerId
-        );
+      // Fetch notifications in parallel for better performance
+      const notificationsStart = Date.now();
+      const [specificNotifications, broadcastNotifications] = await Promise.all(
+        [
+          // Lấy thông báo chỉ định riêng cho customer (target_user_id = customerId)
+          this.notificationsRepository.findSpecificNotifications(customerId),
+          // Lấy thông báo broadcast cho vai trò CUSTOMER
+          this.notificationsRepository.findBroadcastNotifications('CUSTOMER')
+        ]
+      );
+      logger.log(
+        `Notifications fetch took ${Date.now() - notificationsStart}ms`
+      );
 
-      // Lấy thông báo broadcast cho vai trò CUSTOMER
-      // Use query builder instead of Raw for better array handling
-      console.log('Fetching broadcast notifications for CUSTOMER...');
-      const broadcastNotifications =
-        await this.notificationsRepository.findBroadcastNotifications(
-          'CUSTOMER'
-        );
-      console.log(
+      logger.log('Fetching broadcast notifications for CUSTOMER...');
+      logger.log(
         `Found ${broadcastNotifications.length} broadcast notifications`
       );
 
+      // Process notifications
+      const processingStart = Date.now();
       // Gộp hai danh sách thông báo và loại bỏ trùng lặp
       const allNotifications = [
         ...specificNotifications,
@@ -1105,14 +1268,33 @@ export class CustomersService {
       const sortedNotifications = uniqueNotifications.sort(
         (a, b) => b.created_at - a.created_at
       );
+      logger.log(
+        `Notifications processing took ${Date.now() - processingStart}ms`
+      );
 
+      // Cache the result
+      const cacheSaveStart = Date.now();
+      try {
+        await this.redisService.set(
+          cacheKey,
+          JSON.stringify(sortedNotifications),
+          cacheTtl * 1000
+        );
+        logger.log(
+          `Notifications cached successfully (${Date.now() - cacheSaveStart}ms)`
+        );
+      } catch (cacheError) {
+        logger.warn('Failed to cache notifications:', cacheError);
+      }
+
+      logger.log(`Total processing time: ${Date.now() - start}ms`);
       return createResponse(
         'OK',
         sortedNotifications,
         `Fetched ${sortedNotifications.length} notifications for customer ${customerId}`
       );
     } catch (error: any) {
-      console.error('Error fetching notifications for customer:', error);
+      logger.error('Error fetching notifications for customer:', error);
       return createResponse(
         'ServerError',
         null,

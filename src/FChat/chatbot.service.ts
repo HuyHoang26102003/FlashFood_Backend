@@ -538,7 +538,7 @@ export class ChatbotService {
     userId: string,
     userType: Enum_UserType
   ): Promise<ChatbotResponse> {
-    let context = this.getOrCreateContext(userId, userType);
+    const context = this.getOrCreateContext(userId, userType);
 
     // Update conversation context
     context.previousMessages.push(userMessage);
@@ -558,14 +558,25 @@ export class ChatbotService {
       // Strip emojis and special characters for better matching
       const cleanMessage = normalizedMessage.replace(/[^\w\s]/gi, '').trim();
 
+      console.log('DEBUG - User type:', context.userType);
+      console.log('DEBUG - User message:', userMessage);
+      console.log('DEBUG - Normalized message:', normalizedMessage);
+      console.log('DEBUG - Clean message:', cleanMessage);
+      console.log(
+        'DEBUG - Available menu options:',
+        JSON.stringify(userHandler.mainMenu)
+      );
+
       const selectedOption = userHandler.mainMenu.find(option => {
         // Try exact value match first
         if (option.value.toLowerCase() === normalizedMessage) {
+          console.log('DEBUG - Exact value match found:', option.value);
           return true;
         }
 
         // Try exact text match (with emojis)
         if (option.text.toLowerCase() === normalizedMessage) {
+          console.log('DEBUG - Exact text match found:', option.text);
           return true;
         }
 
@@ -574,36 +585,43 @@ export class ChatbotService {
           .toLowerCase()
           .replace(/[^\w\s]/gi, '')
           .trim();
-        return (
-          cleanOptionText === cleanMessage ||
-          cleanMessage.includes(cleanOptionText)
+
+        console.log(
+          'DEBUG - Comparing:',
+          cleanOptionText,
+          'with',
+          cleanMessage
         );
+        const isMatch =
+          cleanOptionText === cleanMessage ||
+          cleanMessage.includes(cleanOptionText);
+        if (isMatch) {
+          console.log('DEBUG - Text match found:', option.text, option.value);
+        }
+        return isMatch;
       });
 
-      if (selectedOption) {
-        // Handle the selected option directly
-        console.log(`Option selected: ${selectedOption.value}`);
+      console.log(
+        'DEBUG - Selected option:',
+        selectedOption ? JSON.stringify(selectedOption) : 'none'
+      );
 
+      if (selectedOption) {
+        // Handle the selected option
         switch (selectedOption.value) {
           case 'vehicle_help':
-            context.lastIntent = 'driver_vehicle';
-            this.contexts.set(userId, context);
             return {
               message: 'I can assist you with vehicle-related concerns.',
               type: 'text',
               followUpPrompt: 'How else can I assist you today?'
             };
           case 'navigation_help':
-            context.lastIntent = 'driver_navigation';
-            this.contexts.set(userId, context);
             return {
               message: 'I can help you with navigation and route optimization.',
               type: 'text',
               followUpPrompt: 'What specific navigation assistance do you need?'
             };
           case 'emergency':
-            context.lastIntent = 'emergency';
-            this.contexts.set(userId, context);
             return {
               message:
                 '🚨 This is an emergency support channel. What type of emergency?',
@@ -618,14 +636,71 @@ export class ChatbotService {
               requiresHuman: true
             };
           case 'human_agent':
-            context.lastIntent = 'human_request';
-            this.contexts.set(userId, context);
             return {
               message:
                 "I'll connect you with a human representative right away! 👥",
               type: 'transfer',
               priority: 'medium',
               requiresHuman: true
+            };
+          // Restaurant owner menu options
+          case 'manage_orders':
+            return {
+              message:
+                'I can help you manage your restaurant orders. What would you like to do?',
+              type: 'options',
+              options: [
+                { text: 'View pending orders', value: 'view_pending' },
+                { text: 'Update preparation time', value: 'update_time' },
+                { text: 'Mark items unavailable', value: 'mark_unavailable' },
+                { text: 'Order issue', value: 'order_issue' }
+              ]
+            };
+          case 'menu_management':
+            return {
+              message: 'Let me assist you with menu management.',
+              type: 'options',
+              options: [
+                { text: 'Add new item', value: 'add_item' },
+                { text: 'Update existing item', value: 'update_item' },
+                { text: 'Remove item', value: 'remove_item' },
+                { text: 'Change prices', value: 'change_prices' }
+              ]
+            };
+          case 'view_analytics':
+            return {
+              message:
+                "I can help you understand your restaurant's performance metrics.",
+              type: 'options',
+              options: [
+                { text: 'Sales report', value: 'sales_report' },
+                { text: 'Customer feedback', value: 'customer_feedback' },
+                { text: 'Popular items', value: 'popular_items' },
+                { text: 'Delivery statistics', value: 'delivery_stats' }
+              ]
+            };
+          case 'restaurant_settings':
+            return {
+              message: 'What restaurant settings would you like to manage?',
+              type: 'options',
+              options: [
+                { text: 'Update business hours', value: 'update_hours' },
+                { text: 'Manage delivery zones', value: 'delivery_zones' },
+                { text: 'Update contact info', value: 'update_contact' },
+                { text: 'Change restaurant profile', value: 'update_profile' }
+              ]
+            };
+          case 'business_support':
+            return {
+              message:
+                'Here are some business support options for your restaurant:',
+              type: 'options',
+              options: [
+                { text: 'Marketing tips', value: 'marketing_tips' },
+                { text: 'Optimize menu', value: 'optimize_menu' },
+                { text: 'Increase sales', value: 'increase_sales' },
+                { text: 'Reduce costs', value: 'reduce_costs' }
+              ]
             };
           // Add other option handlers as needed
         }
@@ -658,6 +733,11 @@ export class ChatbotService {
     // Update context
     context.lastIntent = intent?.name;
     this.contexts.set(userId, context);
+
+    // Validate options before returning
+    if (response && response.options) {
+      response.options = this.validateMenuOptions(response.options);
+    }
 
     return response;
   }
@@ -1152,6 +1232,65 @@ export class ChatbotService {
               priority: 'medium',
               requiresHuman: true
             };
+          // Restaurant owner menu options
+          case 'manage_orders':
+            return {
+              message:
+                'I can help you manage your restaurant orders. What would you like to do?',
+              type: 'options',
+              options: [
+                { text: 'View pending orders', value: 'view_pending' },
+                { text: 'Update preparation time', value: 'update_time' },
+                { text: 'Mark items unavailable', value: 'mark_unavailable' },
+                { text: 'Order issue', value: 'order_issue' }
+              ]
+            };
+          case 'menu_management':
+            return {
+              message: 'Let me assist you with menu management.',
+              type: 'options',
+              options: [
+                { text: 'Add new item', value: 'add_item' },
+                { text: 'Update existing item', value: 'update_item' },
+                { text: 'Remove item', value: 'remove_item' },
+                { text: 'Change prices', value: 'change_prices' }
+              ]
+            };
+          case 'view_analytics':
+            return {
+              message:
+                "I can help you understand your restaurant's performance metrics.",
+              type: 'options',
+              options: [
+                { text: 'Sales report', value: 'sales_report' },
+                { text: 'Customer feedback', value: 'customer_feedback' },
+                { text: 'Popular items', value: 'popular_items' },
+                { text: 'Delivery statistics', value: 'delivery_stats' }
+              ]
+            };
+          case 'restaurant_settings':
+            return {
+              message: 'What restaurant settings would you like to manage?',
+              type: 'options',
+              options: [
+                { text: 'Update business hours', value: 'update_hours' },
+                { text: 'Manage delivery zones', value: 'delivery_zones' },
+                { text: 'Update contact info', value: 'update_contact' },
+                { text: 'Change restaurant profile', value: 'update_profile' }
+              ]
+            };
+          case 'business_support':
+            return {
+              message:
+                'Here are some business support options for your restaurant:',
+              type: 'options',
+              options: [
+                { text: 'Marketing tips', value: 'marketing_tips' },
+                { text: 'Optimize menu', value: 'optimize_menu' },
+                { text: 'Increase sales', value: 'increase_sales' },
+                { text: 'Reduce costs', value: 'reduce_costs' }
+              ]
+            };
           // Add other option handlers as needed
         }
       }
@@ -1161,21 +1300,49 @@ export class ChatbotService {
       message:
         "I'm not sure I understand. Let me show you what I can help you with:",
       type: 'options',
-      options: userHandler?.mainMenu || [
-        { text: 'Talk to human', value: 'human_agent' }
-      ],
+      options: this.validateMenuOptions(
+        userHandler?.mainMenu || [
+          { text: 'Talk to human', value: 'human_agent' }
+        ]
+      ),
       confidence: 0.1
     };
+  }
+
+  // Helper method to ensure menu options are correctly formatted
+  private validateMenuOptions(options: Array<{ text: string; value: string }>) {
+    if (!options) return options;
+
+    // Deep clone to avoid modifying the original
+    const validatedOptions = JSON.parse(JSON.stringify(options));
+
+    // Check for and fix any double underscores in option values
+    for (const option of validatedOptions) {
+      if (option.value && option.value.includes('__')) {
+        console.log(
+          `DEBUG - Found double underscore in option value: ${option.value}`
+        );
+        option.value = option.value.replace(/__/g, '_');
+        console.log(`DEBUG - Fixed to: ${option.value}`);
+      }
+    }
+
+    return validatedOptions;
   }
 
   getGreeting(userType: Enum_UserType): ChatbotResponse {
     const userHandler = this.userTypeHandlers.get(userType);
 
+    // Validate menu options before returning
+    const validatedOptions = this.validateMenuOptions(
+      userHandler?.mainMenu || []
+    );
+
     return {
       message:
         userHandler?.welcomeMessage || 'Hello! How can I help you today?',
       type: 'options',
-      options: userHandler?.mainMenu || [],
+      options: validatedOptions,
       followUpPrompt:
         'Please select an option or tell me what you need help with.'
     };

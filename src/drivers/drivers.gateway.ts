@@ -3143,7 +3143,7 @@ export class DriversGateway
     // Process transaction with Redis lock
     const lockKey = `order_transaction:${order.id}`;
     const lockAcquired = await this.redisService.setNx(lockKey, 'locked', 3000);
-
+    await this.redisService.del(`orders:customer:${order.customer_id}`);
     try {
       if (!lockAcquired) {
         logToFile('Failed to acquire lock for transaction', {

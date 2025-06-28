@@ -37,6 +37,7 @@ import { UserRepository } from 'src/users/users.repository';
 import { AdminFakeController } from './admin.controller-fake';
 import { JwtService } from '@nestjs/jwt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { RedisService } from 'src/redis/redis.service';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
     EmailService,
     CartItemsService,
     CartItemsRepository,
+    RedisService,
     MenuItemsRepository,
     AddressBookRepository,
     MenuItemVariantsRepository,

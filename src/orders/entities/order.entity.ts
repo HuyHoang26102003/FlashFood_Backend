@@ -119,6 +119,12 @@ export class Order {
   @Column('decimal')
   service_fee: number;
 
+  @Column('decimal')
+  sub_total: number;
+
+  @Column('decimal')
+  discount_amount: number;
+
   @Column({
     type: 'enum',
     enum: ['PENDING', 'PAID', 'FAILED'],
