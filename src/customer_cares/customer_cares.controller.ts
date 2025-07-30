@@ -8,27 +8,27 @@ import {
   Delete,
   Query
 } from '@nestjs/common';
-import { CustomerCareService } from './customer_cares.service'; // Corrected to use CustomerCareService
-import { CreateCustomerCareDto } from './dto/create-customer_cares.dto'; // Corrected to use CreateCustomerCareDto
-import { UpdateCustomerCareDto } from './dto/update-customer_cares.dto'; // Corrected to use UpdateCustomerCareDto
+import { CustomerCareService } from './customer_cares.service';
+import { CreateCustomerCareDto } from './dto/create-customer_cares.dto';
+import { UpdateCustomerCareDto } from './dto/update-customer_cares.dto';
 
 @Controller('customer-cares')
 export class CustomerCaresController {
-  constructor(private readonly customerCareService: CustomerCareService) {} // Corrected service to CustomerCareService
+  constructor(private readonly customerCareService: CustomerCareService) {}
 
   @Post('reset-inquiries-cache')
   resetInquiriesCache() {
-    return this.customerCareService.resetInquiriesCache(); // Corrected service method to use customerCareService
+    return this.customerCareService.resetInquiriesCache();
   }
 
   @Post()
   create(@Body() createCustomerCareDto: CreateCustomerCareDto) {
-    return this.customerCareService.create(createCustomerCareDto); // Corrected service method to use customerCareService
+    return this.customerCareService.create(createCustomerCareDto);
   }
 
   @Get()
   findAll() {
-    return this.customerCareService.findAll(); // Corrected service method to use customerCareService
+    return this.customerCareService.findAll();
   }
 
   @Get('paginated')
@@ -47,20 +47,20 @@ export class CustomerCaresController {
   }
   @Get(':id')
   findCustomerCareById(@Param('id') id: string) {
-    return this.customerCareService.findCustomerCareById(id); // Corrected service method to use customerCareService
+    return this.customerCareService.findCustomerCareById(id);
   }
 
   @Get(':field/:value')
   findOne(@Param('field') field: string, @Param('value') value: string) {
-    return this.customerCareService.findOne({ [field]: value }); // Corrected service method to use customerCareService
+    return this.customerCareService.findOne({ [field]: value });
   }
 
   @Patch(':id')
   update(
     @Param('id') id: string,
-    @Body() updateCustomerCareDto: UpdateCustomerCareDto // Corrected DTO to UpdateCustomerCareDto
+    @Body() updateCustomerCareDto: UpdateCustomerCareDto
   ) {
-    return this.customerCareService.update(id, updateCustomerCareDto); // Corrected service method to use customerCareService
+    return this.customerCareService.update(id, updateCustomerCareDto);
   }
 
   @Patch(':id/availability')
@@ -70,6 +70,6 @@ export class CustomerCaresController {
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.customerCareService.remove(id); // Corrected service method to use customerCareService
+    return this.customerCareService.remove(id);
   }
 }

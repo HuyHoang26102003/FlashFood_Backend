@@ -20,10 +20,6 @@ redis.connect().catch(err => logger.error('Redis connection error:', err));
 
 const logger = new Logger('CustomersService');
 
-// interface CustomerCareWithBanStatus extends Omit<CustomerCare, 'generateId'> {
-//   is_banned: boolean;
-// }
-
 @Injectable()
 export class CustomerCareService {
   constructor(
@@ -41,8 +37,7 @@ export class CustomerCareService {
       last_name,
       contact_email,
       contact_phone,
-      // assigned_tickets,
-      // is_assigned,
+
       created_at,
       updated_at,
       avatar,
@@ -113,7 +108,6 @@ export class CustomerCareService {
     const start = Date.now();
 
     try {
-      // Nếu forceRefresh = true, xóa cache trước
       if (forceRefresh) {
         await this.redisService.del(cacheKey);
         logger.log(`Forced cache refresh for ${cacheKey}`);
@@ -152,7 +146,7 @@ export class CustomerCareService {
         `Customer care fetch took ${Date.now() - customerCareStart}ms`
       );
 
-      // 3. Fetch inquiries với fields tối ưu
+      // 3. Fetch inquiries
       const inquiriesStart = Date.now();
       const inquiries = await this.dataSource
         .getRepository(CustomerCareInquiry)
@@ -204,7 +198,7 @@ export class CustomerCareService {
               id: inquiry.customer.id,
               first_name: inquiry.customer.first_name,
               last_name: inquiry.customer.last_name,
-              avatar: inquiry.customer.avatar // Đảm bảo include avatar
+              avatar: inquiry.customer.avatar
             }
           : null,
         order: inquiry.order ? inquiry.order : null
@@ -336,7 +330,7 @@ export class CustomerCareService {
         );
       }
 
-      // Toggle the available_for_work flag (if your schema uses it)
+      // Toggle the available_for_work flag
       record.available_for_work = !record.available_for_work;
 
       const savedRecord = await this.repository.update(id, record);
@@ -406,7 +400,6 @@ export class CustomerCareService {
 
   async resetInquiriesCache(): Promise<ApiResponse<any>> {
     try {
-      // Xóa các key liên quan đến inquiries
       await this.redisService.deleteByPattern('inquiries:customer_care:*');
       return createResponse('OK', null, 'Inquiries cache reset successfully');
     } catch (error: any) {

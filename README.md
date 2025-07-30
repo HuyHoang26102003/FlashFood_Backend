@@ -1,99 +1,333 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# FlashFood Management System - Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Overview
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+FlashFood Management System is a comprehensive food delivery platform built with NestJS. This system handles the administrative operations, customer support, and business logic for a food delivery service. The backend is shared between multiple developers, with this portion focusing on **Admin Management** and **Customer Care** functionalities.
 
-## Description
+## 🏗️ Architecture
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+This backend is built using:
 
-## Project setup
+- **NestJS** - Progressive Node.js framework
+- **TypeORM** - Database ORM
+- **PostgreSQL** - Primary database
+- **Redis** - Caching and session management
+- **Socket.io** - Real-time communication
+- **JWT** - Authentication and authorization
+
+## 👥 User Roles & Access Control
+
+### Admin Roles
+
+1. **Super Admin** - Full system access and control
+2. **Companion Admin** - Restaurant and order management
+3. **Finance Admin** - Financial operations and reporting
+
+### Customer Care
+
+- Dedicated support team for customer inquiries and issue resolution
+
+## 🔧 Core Modules Handled
+
+### 1. Admin Management (`/admin`)
+
+**Location**: `src/admin/`
+
+**Key Features**:
+
+- Multi-role admin authentication and authorization
+- Admin profile management
+- Role-based access control
+- Real-time admin dashboard via WebSocket
+- Admin activity logging and monitoring
+
+**Main Components**:
+
+- `admin.controller.ts` - REST API endpoints
+- `admin.service.ts` - Business logic (549 lines)
+- `admin.gateway.ts` - Real-time WebSocket communication
+- `admin.repository.ts` - Database operations
+
+### 2. Admin Chatbot (`/admin_chatbot`)
+
+**Location**: `src/admin_chatbot/`
+
+**Key Features**:
+
+- AI-powered chatbot for admin support
+- Automated responses to common admin queries
+- Integration with admin workflow
+- Data seeding and startup services
+
+**Main Components**:
+
+- `admin_chatbot.service.ts` - Core chatbot logic (718 lines)
+- `admin_chatbot.gateway.ts` - WebSocket communication (292 lines)
+- `data-seeding.service.ts` - Initial data setup (499 lines)
+
+### 3. Customer Care (`/customer_cares`)
+
+**Location**: `src/customer_cares/`
+
+**Key Features**:
+
+- Customer support ticket management
+- Real-time customer chat support
+- Issue tracking and resolution
+- Customer inquiry handling
+
+**Main Components**:
+
+- `customer_cares.service.ts` - Support logic (457 lines)
+- `customer_cares.gateway.ts` - Real-time chat
+- `customer_cares.repository.ts` - Data persistence
+
+### 4. Customer Care Inquiries (`/customer_cares_inquires`)
+
+**Location**: `src/customer_cares_inquires/`
+
+**Key Features**:
+
+- Detailed inquiry management
+- Customer feedback processing
+- Support ticket categorization
+- Response tracking
+
+**Main Components**:
+
+- `customer_cares_inquires.service.ts` - Inquiry processing (470 lines)
+- `customer_cares_inquires.repository.ts` - Data operations (530 lines)
+
+### 5. Admin Charts & Analytics (`/admin_chart`)
+
+**Location**: `src/admin_chart/`
+
+**Key Features**:
+
+- Business intelligence and analytics
+- Performance metrics dashboard
+- Revenue and order analytics
+- Custom chart generation
+
+**Main Components**:
+
+- `admin_chart.service.ts` - Analytics engine (997 lines)
+- `admin_chart.controller.ts` - Chart data endpoints
+
+### 6. Finance Rules (`/finance_rules`)
+
+**Location**: `src/finance_rules/`
+
+**Key Features**:
+
+- Financial policy management
+- Commission and fee calculations
+- Payment rule configurations
+- Financial reporting
+
+**Main Components**:
+
+- `finance_rules.service.ts` - Financial logic (216 lines)
+- `finance_rules.repository.ts` - Financial data (163 lines)
+
+### 7. Promotions (`/promotions`)
+
+**Location**: `src/promotions/`
+
+**Key Features**:
+
+- Promotional campaign management
+- Discount code generation
+- Marketing campaign tracking
+- Promotion analytics
+
+**Main Components**:
+
+- `promotions.service.ts` - Campaign logic (530 lines)
+- `promotions.repository.ts` - Promotion data (153 lines)
+
+### 8. Notifications (`/notifications`)
+
+**Location**: `src/notifications/`
+
+**Key Features**:
+
+- Multi-channel notification system
+- Push notifications
+- Email notifications
+- SMS notifications
+- Notification preferences management
+
+**Main Components**:
+
+- `notifications.service.ts` - Notification logic (217 lines)
+- `notifications.repository.ts` - Notification data (359 lines)
+
+### 9. FAQ Management (`/faq`)
+
+**Location**: `src/faq/`
+
+**Key Features**:
+
+- Frequently Asked Questions management
+- Dynamic FAQ content
+- Category-based FAQ organization
+- Search functionality
+
+**Main Components**:
+
+- `faq.service.ts` - FAQ logic (148 lines)
+- `faq.repository.ts` - FAQ data (58 lines)
+
+### 10. Banned Account Management (`/banned-account`)
+
+**Location**: `src/banned-account/`
+
+**Key Features**:
+
+- Account suspension management
+- Violation tracking
+- Appeal process handling
+- Account restoration
+
+**Main Components**:
+
+- `banned-account.service.ts` - Account management logic
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- PostgreSQL database
+- Redis server
+- npm or yarn package manager
+
+### Installation
+
+1. **Clone the repository**
 
 ```bash
-$ npm install
+git clone <repository-url>
+cd FlashFood_Backend
 ```
 
-## Compile and run the project
+2. **Install dependencies**
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+3. **Environment Setup**
+   Create a `.env` file in the root directory with the following variables:
+
+```env
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/flashfood
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# JWT
+JWT_SECRET=your-jwt-secret
+
+# Other configurations...
+```
+
+4. **Database Migration**
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run migration:run
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+5. **Start the application**
 
 ```bash
-$ npm install -g mau
-$ mau deploy
+# Development mode
+npm run start:dev
+
+# Production mode
+npm run start:prod
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## 📊 API Documentation
 
-## Resources
+### Admin Endpoints
 
-Check out a few resources that may come in handy when working with NestJS:
+- `POST /admin/login` - Admin authentication
+- `GET /admin/profile` - Get admin profile
+- `PUT /admin/profile` - Update admin profile
+- `GET /admin/dashboard` - Admin dashboard data
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Customer Care Endpoints
 
-## Support
+- `POST /customer-cares/ticket` - Create support ticket
+- `GET /customer-cares/tickets` - List support tickets
+- `PUT /customer-cares/ticket/:id` - Update ticket status
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Analytics Endpoints
 
-## Stay in touch
+- `GET /admin-chart/revenue` - Revenue analytics
+- `GET /admin-chart/orders` - Order analytics
+- `GET /admin-chart/users` - User analytics
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 🔐 Authentication & Authorization
 
-## License
+The system uses JWT-based authentication with role-based access control:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- **Super Admin**: Full system access
+- **Companion Admin**: Restaurant and order management
+- **Finance Admin**: Financial operations only
+- **Customer Care**: Support and inquiry management
+
+## 📈 Key Features
+
+### Real-time Communication
+
+- WebSocket-based real-time chat for customer support
+- Live admin dashboard updates
+- Real-time notification delivery
+
+### Analytics & Reporting
+
+- Comprehensive business intelligence
+- Custom chart generation
+- Performance metrics tracking
+
+### Multi-role Support
+
+- Granular permission system
+- Role-based feature access
+- Audit trail for admin actions
+
+### Customer Support
+
+- Ticket-based support system
+- Real-time chat support
+- FAQ management
+- Inquiry tracking
+
+## 📝 Testing
+
+```bash
+# Unit tests
+npm run test
+
+```
+
+## 📦 Deployment
+
+The application is configured for deployment on Vercel with the provided `vercel.json` configuration.
+
+## 📝 Contributing
+
+This backend is shared between multiple developers. Please ensure:
+
+- Follow the existing code structure
+- Add proper documentation for new features
+- Include tests for new functionality
+- Coordinate with team members for shared modules
+
+---
+
+**Note**: This README focuses on the Admin Management and Customer Care modules handled by this developer. The complete FlashFood system includes additional modules handled by other team members for a comprehensive food delivery platform.

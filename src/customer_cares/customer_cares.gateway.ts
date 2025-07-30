@@ -22,10 +22,8 @@ export class CustomerCaresGateway {
   }) {
     console.log('Received customer care request:', data);
 
-    // Hardcode ID nhân viên chăm sóc khách hàng
     const customerCareId = 'FF_CC_320571da-59d0-483a-9c39-912d2a72b256';
 
-    // Phát sự kiện mới để thông báo FchatGateway về nhân viên được gán
     this.eventEmitter.emit('customerCareAssigned', {
       userId: data.userId,
       customerCareId,
